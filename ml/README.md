@@ -1,99 +1,68 @@
-# ml/ — 공개 실데이터(CWRU, MaFaulDa) 기반 머신러닝 학습·검증
+# `ml/` 공개 데이터 학습·검증
 
-시뮬레이션 신호로 검증했던 파이프라인(특징추출 → 3-sigma 이상탐지)을
-**실제 회전기계 데이터**로 검증하고, 여기에 **지도학습 고장 분류기**를 추가한 단계.
-교수 자문의 "초기 고장 데이터 확보 전략: 공개 데이터셋(CWRU, MaFaulDa) 활용 우선"을 그대로 실행한 것이다.
+`ml/`은 CWRU와 MaFaulDa 공개 회전기계 파형을 읽어 특징을 만들고, 정상 학습형 이상 탐지와 파일 단위 지도 분류를 평가하는 Python 경로다. 계산·분할·평가 해설은 [최종보고서 상세 해설](../docs/report-detail/README.md), 결과의 단위와 분모는 [결과와 검증 범위](../docs/report-detail/06-results.md)에 연결되어 있다.
 
-## 데이터
+## 기존 CWRU·MaFaulDa 데이터와 6특징
 
-| 데이터셋 | 내용 | 사용량 |
+기존 파이프라인의 분류 입력은 `rms`, `kurtosis`, `harmonic1_ratio`, `harmonic2_ratio`, `harmonic3_ratio`, `high_freq_ratio` 여섯 값이다. 고조파·고주파 특징은 대역 진폭합을 `f > 1 Hz`인 전체 FFT 진폭합으로 나눈 비율이다. 분류 train/test는 같은 파일의 창을 한 분할에 묶어 파일 단위로 나눈다.
+
+| 데이터 | 원 파형과 추출 규모 | 분류 평가 분할 |
 |---|---|---|
-| **CWRU** (Case Western) | 베어링 결함. 12kHz Drive-End 가속도, 정상 + 내륜/볼/외륜 × 결함크기 3종 × 부하 0~3HP | 40파일 (~134MB) → 윈도우 2,913개 |
-| **MaFaulDa** (UFRJ) | 50kHz 8채널. 정상 + 불평형(6g/35g) + 수평 정렬불량(1.0/2.0mm) | 36파일 (~630MB) → 윈도우 1,044개 |
+| CWRU | 12 kHz Drive-End, 40파일, 2,913창 | 학습 28파일, 시험 12파일·934창 |
+| MaFaulDa | 50 kHz 8채널, 36파일, 1,044창 | 학습 25파일, 시험 11파일·319창 |
 
-- MaFaulDa는 전체 13GB 중 회전속도(12~61Hz)를 고르게 분산시킨 서브셋만 다운로드.
-  `vertical-misalignment/`는 서버가 403으로 막아둬 수평 정렬불량만 사용 (2026-07 기준).
-- 불평형(1×)·정렬불량(2×)은 본 프로젝트의 핵심 고장유형과 직접 대응(MaFaulDa),
-  베어링 결함(고주파 충격성)은 보조 지표(high_freq, kurtosis) 검증용(CWRU).
+분류 test 창에서의 기록 정확도는 다음과 같다.
 
-재현: `python -m ml.download_data all`
+| 모델 | CWRU 934창 | MaFaulDa 319창 |
+|---|---:|---:|
+| Decision Tree, depth ≤ 4 | 85.8% | 71.5% |
+| Logistic Regression | 91.2% | 61.8% |
+| Random Forest, 200 trees | 82.2% | 72.4% |
 
-## 방법
+## 정상 학습형 이상 탐지 기록
 
-- **윈도우링**: 시뮬레이션 설정(해상도 3.9Hz, 윈도우당 ~10회전)과 등가가 되도록
-  CWRU 4096pt / MaFaulDa 16384pt, 50% 겹침. (`ml/dataset.py`)
-- **특징**: 기존 `src/feature_extraction.py`의 함수(compute_fft, frequency_band_energy,
-  estimate_rotation_hz)를 그대로 재사용. 실데이터는 센서 감도·운전조건에 따라 절대 진폭이
-  제각각이므로 하모닉/고주파 에너지는 전체 스펙트럼 에너지 대비 **비율**로 정규화.
-  최종 6특징: `rms, kurtosis, harmonic1/2/3_ratio, high_freq_ratio` (`ml/features_real.py`)
-- **데이터 누수 방지**: 분류기 train/test 분할은 반드시 **파일 단위** (같은 파일의 겹친
-  윈도우가 양쪽에 들어가면 성능이 허위로 부풀려짐).
-- **이상탐지 평가 프로토콜**: 실배포 시나리오(같은 설비의 초기 정상 데이터로 baseline
-  학습 → 이후 감시)에 맞게 정상 파일의 앞 60%로 학습, 뒤 40% + 고장 전체로 평가.
+이상 탐지는 정상 파일의 앞 60% 창으로 기준을 학습하고, 정상 파일의 뒤 40%와 고장 파일의 창을 평가한다. 단일 창 1차 판정은 여섯 특징의 3σ `is_suspect`를 비교하며, MaFaulDa 속도별 기준은 12~61 Hz를 네 구간으로 나눈다.
 
-## 결과 — 트랙 1: 이상탐지 (정상만 학습)
+| 판정 기록 | CWRU | MaFaulDa |
+|---|---:|---:|
+| 단일 창 3σ 정상 오경보율 | 4.8% | 0.0% |
+| 단일 창 3σ 고장 탐지율 | 볼 100%, 내륜 100%, 외륜 100% | 불평형 74.4%, 정렬불량 56.9% |
+| 회전 구간별 3σ 탐지율 | — | 불평형 90.2%, 정렬불량 82.5%; 정상 오경보율 0.0% |
+| 5창 중 3창 확정 규칙 | 정상 확정 오경보 창 비율 1.8%, 고장 36/36파일 경보 | 정상 확정 오경보 창 비율 0.0%, 고장 16/24파일 경보 |
 
-단일 윈도우 1차 판정(is_suspect) 기준:
+단일 창 탐지율은 창 단위 비율이며, `36/36`과 `16/24`는 파일별 확정 경보 여부다. 결과 JSON은 [`cwru_results.json`](results/cwru_results.json), [`mafaulda_results.json`](results/mafaulda_results.json)에 저장돼 있다.
 
-| | 3-sigma (이식 채택안) | Isolation Forest (이식 불가, 참고) |
+## 보고서의 별도 구현·평가 경로
+
+아래 기록은 기존 `ml/`의 평가표와 별도 버전·입력 계약을 가진다.
+
+| 경로 | 입력·계산 | 기록된 평가 |
 |---|---|---|
-| CWRU 오탐율 | 4.8% | 2.4% |
-| CWRU 탐지율 (내륜/볼/외륜) | **100 / 100 / 100%** | 100 / 100 / 100% |
-| MaFaulDa 오탐율 | **0.0%** | 0.7% |
-| MaFaulDa 탐지율 (불평형/정렬불량) | 74.4 / 56.9% | 62.9 / 39.1% |
+| CWRU 펌웨어 통합 | CWRU `N=4096`, `fs=12000 Hz`, RMS·첨도·1×/2×/3×·HF 비율의 6특징, 네 클래스 | Python/C 특징·점수 비교 640창, 클래스 정답 581/640(90.78%); 파일마다 첫 4창을 초기 이력으로 채운 뒤, 10파일의 나머지 600창에서 4/5 확정 결과를 집계. 고장 486/486창 탐지·정상 0/114창 확정 오경보 |
+| Mendeley V3 101특징 모델 | 20개 trial-group, 다섯 fold OOF 개발 평가; 선택 축 400점·400 Hz 모델 입력 | 1,200개 OOF 기록, 정확도 93.67%, 축 정렬 재현율 86.00%, 기계적 이완 재현율 88.67% |
+| 실시간 101특징 어댑터 | ADXL345 512표본 창을 시간축으로 400점 보간, 선택 축 기본 X, 실제 FG RPM 사용 | 20×20 DFT 분해와 생성된 선형 weight/bias로 평균 SVM 마진 계산, 시리얼 230400 baud |
+| FG V3 보고서 검증 사본 | 512표본 창에서 회전 동기 1× 진폭·위상 계산 | 시리얼 115200 baud, 정상 팬 336창 관측 기록 |
 
-- **연속성 필터(confirm_window=5) 반영 확정 경보 기준**: CWRU 오탐 1.8%·고장파일 36/36 경보,
-  MaFaulDa 오탐 0%·고장파일 16/24 경보.
-- **회전수 구간별 baseline** (12~61Hz를 4구간으로 나눠 구간별 mean/std — 자문의
-  "회전수는 모든 분석의 기준축"의 구현): MaFaulDa 탐지율 **불평형 74→90.2%,
-  정렬불량 57→82.5%** (오탐 0% 유지). ESP32에는 (mean,std) 상수 세트만 구간 수만큼 두면 됨.
-- **심각도별** (전역 baseline 기준): 불평형 35g **98.9%** / 6g 50.0%,
-  정렬불량 2.0mm 75.9% / 1.0mm 37.9% — 시뮬레이션에서 확인했던 민감도 경계
-  (경미한 고장일수록 급격히 어려워짐)가 실데이터에서 같은 패턴으로 재현됨.
+Mendeley 개발 평가, 실시간 입력 연결, FG 관측, CWRU 호스트 재생은 상세 해설의 각 절에서 입력과 근거 종류를 확인한다: [101특징 모델](../docs/report-detail/03-ml-model.md), [FG·하드웨어](../docs/report-detail/05-fg-hardware.md), [결과와 검증 범위](../docs/report-detail/06-results.md).
 
-## 결과 — 트랙 2: 고장유형 분류 (지도학습)
+## 주요 파일과 실행 순서
 
-| 모델 | CWRU 정확도 | MaFaulDa 정확도 | ESP32 이식 |
-|---|---|---|---|
-| Decision Tree (depth≤4) | 85.8% | 71.5% | **가능** — if-else 몇 개로 변환됨 |
-| Logistic Regression | 91.2% | 61.8% | 가능 (계수 상수) |
-| Random Forest (200트리) | 82.2% | 72.4% | 불가 (참고 상한) |
+| 경로 | 역할 |
+|---|---|
+| `dataset.py` | 공개 파일에서 원 파형 창·라벨·회전수·파일 그룹을 구성 |
+| `features_real.py` | 여섯 특징 계산과 행렬 변환 |
+| `train_models.py` | 정상 학습형 탐지 및 세 분류기 평가, 결과 JSON 저장 |
+| `download_data.py` | CWRU·MaFaulDa 데이터 파일 선별 다운로드 |
+| `export_c.py` | 학습된 작은 분류기를 C 헤더로 출력 |
+| `make_figures.py` | 혼동행렬·특징 중요도·분포 그림 생성 |
 
-- depth≤4 결정트리가 Random Forest와 사실상 동급 → **"작은 모델의 손해가 거의 없다"**는
-  것이 실데이터로 확인됨. 이식성 때문에 통계/소형 모델을 채택한 아키텍처 결정의 정당화.
-- 학습된 트리는 `python -m ml.export_c`로 **C 헤더**(`c/ml_model_cwru.h`,
-  `c/ml_model_mafaulda.h`)로 자동 변환됨 — 라이브러리 의존성 0, 부동소수점 비교 몇 번.
-  3-sigma baseline 상수(mean/std)도 같은 헤더에 포함.
+재현 순서는 `download_data` → `train_models` → `make_figures` → `export_c`이며, 각 모듈은 `python -m ml.<모듈명>`으로 실행한다. 입력 계산은 [`dataset.py`](dataset.py)·[`features_real.py`](features_real.py)에서 [공통 Python 특징 함수](../src/feature_extraction.py)를 호출한다. 저장소 V2는 별도 [V2 기준 코드](../src/feature_extraction_v2.py)와 [V2 C 코어](../edge_module_c/README.md)에서 확인한다.
 
-## 주요 발견 (중간보고서용 요약)
+## 추가 구현 원본
 
-1. **3-sigma가 Isolation Forest와 대등하거나 우수** (MaFaulDa에서는 모든 항목 우위) —
-   "성능이 아니라 이식성 때문에 통계 방식을 택했다"던 기존 결정이 실데이터에서는
-   성능으로도 손해가 아님이 확인됨.
-2. **회전수/부하 기준축의 실증**: 처음에 부하조건이 다른 정상 파일을 test에 넣자 오탐
-   35.4%가 나왔고(원인: baseline이 못 본 운전점), 시간 기준 분할로 바꾸자 4.8%,
-   회전수 구간별 baseline까지 적용하자 MaFaulDa 탐지율이 15~25%p 상승.
-3. **kurtosis 재검토 완료**: 시뮬레이션에서는 판별력이 없어 제외했으나(재검토 조건:
-   실측 데이터 확인), CWRU 베어링 결함(임펄스성)에서 정상 대비 뚜렷한 분리를 보임 —
-   실데이터 특징 세트에는 포함.
-4. **민감도 경계의 정직한 보고**: 중증 고장(35g, 2.0mm)은 76~99% 탐지하지만 경미
-   고장(6g, 1.0mm)은 38~50% — 조기(경미) 단계 탐지는 여전히 한계이며, 이것이
-   연속성 필터·drift 감시(서서히 나빠짐 경고)를 병행하는 이유.
-5. **ESP32 경로 확보**: 결정트리 + baseline 상수가 C 헤더로 자동 내보내져,
-   기존 c/ 파이프라인에 특징 벡터만 넘기면 실데이터 학습 모델이 온디바이스로 동작.
-
-## 파일 구성
-
-```
-ml/download_data.py   데이터셋 선별 다운로드 (CWRU 40파일, MaFaulDa 36파일)
-ml/dataset.py         원시 신호 -> 윈도우 + 라벨/회전수/그룹 메타데이터
-ml/features_real.py   기존 특징 정의의 실데이터 어댑터 (비율 정규화 포함)
-ml/train_models.py    트랙1(이상탐지) + 트랙2(분류) 학습/평가, 결과 JSON 저장
-ml/export_c.py        결정트리 + baseline -> C 헤더 자동 생성
-ml/make_figures.py    혼동행렬 / 특징 중요도 / 클래스별 분포 그림
-ml/results/           *_results.json (전체 수치), figs/ (보고서용 그림)
-ml/models/            학습된 모델 (.joblib, git 미포함 - 재생성 가능)
-data/                 원본 데이터 (git 미포함 - download_data.py로 재다운로드)
-```
-
-재현 순서: `download_data` → `train_models` → `make_figures` → `export_c` (모두 `python -m ml.<이름>`)
+| 자료 | 현재 워크스페이스 위치 | 연결 내용 |
+|---|---|---|
+| 101특징 모델 개발 코드 | `D:\obsidian\claude\obsidian_export\Edge_module_folder\fault_type_90_mechanical\` | 특징 계약, trial-group 분할, 개발 평가 |
+| 실시간 101특징 ESP32 코드 | `D:\obsidian\claude\obsidian_export\Edge_module_folder\firmware_ml_evidence_live\` | 230400 baud 입력 어댑터, 20×20 DFT, 선형 모델 계수 |
+| CWRU 펌웨어·호스트 재생 | `D:\obsidian\claude\obsidian_export\Edge_module_folder\firmware_cwru_integration\` | 6특징 C 계산, 640창 비교, 600창 4/5 평가 |
+| 상세 출처 및 보고서 원자료 | [출처·코드 대응표](../docs/report-detail/08-sources.md) | 공개 데이터 출처, 평가 원자료와 현재 코드 위치 |
