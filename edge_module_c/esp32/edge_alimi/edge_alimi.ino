@@ -1,5 +1,8 @@
 /*
- * edge_alimi.ino — 엣지알리미 ESP32 펌웨어 (실무 투입판)
+ * edge_alimi.ino — 엣지알리미 legacy V2 ESP32 firmware (MPU-6050 path)
+ * This V2 build preserves its original implementation and configuration.
+ * The report-default ADXL345 + FG firmware lives at
+ * edge_alimi_adxl345_fg_report/.
  *
  * 3계층 구조에서 "계산기" 역할만 수행:
  *   센서 읽기 → FFT → 특징 추출 → 3σ 판정 → 결과(JSON)만 송출

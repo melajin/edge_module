@@ -1,0 +1,281 @@
+{
+  "scope": "host same firmware C adapter raw MAT replay; no board execution",
+  "files": 10,
+  "source_windows": 640,
+  "scored_windows": 600,
+  "max_feature_abs_error": 2.984279490192421e-13,
+  "max_score_abs_error": 4.334310688136611e-13,
+  "uart_alias_windows_verified": 640,
+  "class_order": [
+    "ball",
+    "inner_race",
+    "normal",
+    "outer_race"
+  ],
+  "subtype_confusion_matrix": [
+    [
+      145,
+      29,
+      0,
+      0
+    ],
+    [
+      0,
+      168,
+      0,
+      6
+    ],
+    [
+      0,
+      0,
+      116,
+      2
+    ],
+    [
+      19,
+      3,
+      0,
+      152
+    ]
+  ],
+  "subtype_accuracy": 0.9078125,
+  "binary_4_of_5": {
+    "n": 600,
+    "tn": 114,
+    "fp": 0,
+    "fn": 0,
+    "tp": 486,
+    "accuracy": 1.0,
+    "specificity": 1.0,
+    "bearing_recall": 1.0,
+    "balanced_accuracy": 1.0
+  },
+  "groups": [
+    {
+      "id": "cwru:106.mat",
+      "label": "inner_race",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\106.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 58,
+      "confirmed": 54,
+      "source_metadata": [
+        0.007,
+        1,
+        1772
+      ]
+    },
+    {
+      "id": "cwru:107.mat",
+      "label": "inner_race",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\107.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 58,
+      "confirmed": 54,
+      "source_metadata": [
+        0.007,
+        2,
+        1750
+      ]
+    },
+    {
+      "id": "cwru:119.mat",
+      "label": "ball",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\119.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 58,
+      "confirmed": 54,
+      "source_metadata": [
+        0.007,
+        1,
+        1772
+      ]
+    },
+    {
+      "id": "cwru:185.mat",
+      "label": "ball",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\185.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 35,
+      "confirmed": 54,
+      "source_metadata": [
+        0.014,
+        0,
+        1797
+      ]
+    },
+    {
+      "id": "cwru:199.mat",
+      "label": "outer_race",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\199.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 57,
+      "confirmed": 54,
+      "source_metadata": [
+        0.014,
+        2,
+        1750
+      ]
+    },
+    {
+      "id": "cwru:200.mat",
+      "label": "outer_race",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\200.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 40,
+      "confirmed": 54,
+      "source_metadata": [
+        0.014,
+        3,
+        1730
+      ]
+    },
+    {
+      "id": "cwru:211.mat",
+      "label": "inner_race",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\211.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 52,
+      "confirmed": 54,
+      "source_metadata": [
+        0.021,
+        2,
+        1750
+      ]
+    },
+    {
+      "id": "cwru:222.mat",
+      "label": "ball",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\222.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 52,
+      "confirmed": 54,
+      "source_metadata": [
+        0.021,
+        0,
+        1797
+      ]
+    },
+    {
+      "id": "cwru:237.mat",
+      "label": "outer_race",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\237.mat",
+      "windows": 58,
+      "warmup_windows": 4,
+      "scored_windows": 54,
+      "subtype_correct": 55,
+      "confirmed": 54,
+      "source_metadata": [
+        0.021,
+        3,
+        1730
+      ]
+    },
+    {
+      "id": "cwru:97.mat",
+      "label": "normal",
+      "source": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\97.mat",
+      "windows": 118,
+      "warmup_windows": 4,
+      "scored_windows": 114,
+      "subtype_correct": 116,
+      "confirmed": 0,
+      "source_metadata": [
+        0.0,
+        0,
+        1797
+      ]
+    }
+  ],
+  "pinned_inputs": {
+    "F:\\aihub_training_runs\\mock_exam_sets\\manifest.json": {
+      "sha256": "7ba1a301bacfcdac0f85c28fde65fde248d24199200ca59c8b2560e237fc7280",
+      "label": "active manifest"
+    },
+    "F:\\aihub_training_runs\\bearing_continuous_simulation\\result.json": {
+      "sha256": "c6065ebeee45e9bfd0dda31cb7e8d8d0c665a0df7332facb29e82c8cf80b43a8",
+      "label": "binary reference result"
+    },
+    "F:\\aihub_training_runs\\mock_exam_sets\\generations\\aa0670d2b81dbee5fcf611e12a7b0ca8ef7b8ecb8bcb97da99b5cdbda3d6b74c\\cwru.json": {
+      "sha256": "d1f70a9f685adc5785c678ce6fb75afac25b24c53056f985dc6c1af7d8e9f2ed",
+      "label": "CWRU manifest"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\firmware_cwru_integration\\artifacts\\cwru\\model.joblib": {
+      "sha256": "6a4bfb1d803bde044dbe28080c452c256047c736a1c984c38781c850c4849ee5",
+      "label": "frozen model"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\firmware_cwru_integration\\artifacts\\cwru\\selection.json": {
+      "sha256": "ed38833d68b47822ab6f47b95a9aa13b40f22a2fb9c089b28ebd69ead6889b56",
+      "label": "selection"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\106.mat": {
+      "sha256": "e5cec7cdd138e6cd1deb9ed8634e5aaa9bc1bd7094ddc075bff606580eb6e883",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\107.mat": {
+      "sha256": "111ba8996a115684661a13c913bd74d8029a59294492f88aec7b03e175fdd388",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\119.mat": {
+      "sha256": "bc72d9df7668219e004a0f711232b23ec0aed393eb9bd8f9f5483426f6b51330",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\185.mat": {
+      "sha256": "5bea2c60f177215ba3ec4ae287faf745d7e14aed1a12efe9e37b27c27044bafc",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\199.mat": {
+      "sha256": "ca4e6407fdb68845a6973da6028477911a62d018580063749fe956441be95cf2",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\200.mat": {
+      "sha256": "2526483d2701220a700df8e6c9db0c527641b0887225907f4096610dd7120f4b",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\211.mat": {
+      "sha256": "8296a02ee489c2d16cbd9fc278ca2e29b22475cec70ebe840558c78b6b743dc1",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\222.mat": {
+      "sha256": "fcc0ee740fa123b1f4683f555458891719efb2857afd9fdee63e8fde0ed14469",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\237.mat": {
+      "sha256": "233d1edb2daa963658369119e389e30f02aca551dd7bb028ab33e7ba63edfd20",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\edge_module\\data\\cwru\\97.mat": {
+      "sha256": "16bf48babcf1c7ac224bc1a81cd9eafdb27e42d5cf559761907e067e8eeadf3c",
+      "label": "raw MAT"
+    },
+    "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\firmware_cwru_integration\\artifacts\\cwru\\locked_test_result.json": {
+      "sha256": "cc9303ff6886904e1dd7cc8d28e855fb4860a336b129ad05d427a0ad2e5fd2a4",
+      "label": "subtype result inspected"
+    }
+  },
+  "firmware_profile": {
+    "fs_hz": 12000,
+    "window": 4096,
+    "stride": 2048,
+    "input_unit": "model convention g",
+    "hf_numerator_upper_hz": 4800,
+    "total_denominator_upper_hz": "just below 6000",
+    "freshness_ms": 2000,
+    "uart_replay_baud": 460800
+  }
+}

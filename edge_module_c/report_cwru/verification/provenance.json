@@ -1,0 +1,42 @@
+{
+  "historical_result": {
+    "path": "verification/result.json",
+    "sha256": "52fbc859e81d9dc59c8e47c8ad7fa742837f973e45a514a547e239e4357a6f21",
+    "origin": "firmware_cwru_integration/verification/result.json",
+    "status": "preserved original report host replay record"
+  },
+  "raw_mat_inputs": {
+    "current_checkout_relative_location": "data/cwru/",
+    "files": [
+      "97.mat",
+      "106.mat",
+      "107.mat",
+      "119.mat",
+      "185.mat",
+      "199.mat",
+      "200.mat",
+      "211.mat",
+      "222.mat",
+      "237.mat"
+    ],
+    "bundled_by_report_module": false
+  },
+  "locked_replay_support_inputs": {
+    "manifest": "F:/aihub_training_runs/mock_exam_sets/manifest.json",
+    "reference_result": "F:/aihub_training_runs/bearing_continuous_simulation/result.json",
+    "training_source": "F:/aihub_training_runs/mock_exam_training/cwru",
+    "paths_recorded_in": "python_reference/aihub_training_rewrite/cwru.py",
+    "currently_required_for": "verify.py full replay"
+  },
+  "generated_model_inputs": {
+    "model": "artifacts/cwru/model.joblib",
+    "selection": "artifacts/cwru/selection.json",
+    "locked_test_result": "artifacts/cwru/locked_test_result.json",
+    "sha256": {
+      "python_reference_sha256": "84522645636a9d879fb77ed2e50bf60ea60d0d4d9c6ed752afa51ddd4a9acda5"
+    }
+  },
+  "basic_host_tests": "python edge_module_c/report_cwru/tests/verify.py --basic-only (build output uses system temporary directory)",
+  "full_replay": "python edge_module_c/report_cwru/tests/verify.py requires the pinned external manifest/reference inputs and MAT source files above",
+  "hardware_measurements": false
+}

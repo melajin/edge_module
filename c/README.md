@@ -1,4 +1,6 @@
-# `c/` 독립 C99 구현
+# `c/` 초기 C99 비교 구현
+
+이 폴더는 초기 계산과 Python/C 수치 비교 기록을 제공한다. 보고서의 첫 실행 경로는 [ADXL345·FG 펌웨어](../edge_module_c/esp32/edge_alimi_adxl345_fg_report/)이며 물리 근거·101특징·CWRU 구현은 [C 계산 안내](../edge_module_c/README.md)에 연결한다.
 
 `c/`는 신호 창에서 특징과 이상 판정을 계산하는 독립 C99 API다. 센서 드라이버 대신 호출자가 표본 배열을 전달하므로 PC 검증과 ESP-IDF 계열 프로젝트에서 같은 계산 함수를 사용할 수 있다. 현재 V2 코어·보고서 연결은 [상세 해설](../docs/report-detail/README.md), 현재 구현 간 차이는 [상위 README](../README.md)에 정리되어 있다.
 

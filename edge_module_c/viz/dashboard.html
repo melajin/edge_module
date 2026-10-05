@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>엣지알리미 — 설비 감시 콘솔</title>
+<title>엣지알리미 — 저장소 V2 설비 감시 콘솔</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1F241C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -29,6 +29,10 @@ body{background:var(--base);color:var(--ink);
 .eyebrow{font-size:11px;letter-spacing:.14em;color:var(--muted);
   text-transform:uppercase;font-weight:600}
 .mono{font-family:var(--mono)}
+.version-note{display:flex;flex-wrap:wrap;gap:5px 14px;align-items:center;
+  padding:8px 11px;margin:0 0 14px;background:#F8F9F7;border:1px solid var(--line);
+  border-radius:6px;color:var(--muted);font-size:12px}
+.version-note strong{color:var(--ink)}
 
 /* ---- 상단 상태 보드 ---- */
 header{display:flex;gap:16px;align-items:stretch;margin-bottom:14px}
@@ -111,6 +115,7 @@ footer{color:var(--muted);font-size:11px;margin-top:10px}
 </head>
 <body>
 
+<div class="version-note"><strong>저장소 V2 · 비율 특징 시뮬레이터</strong><span>보고서 FG V3 경로와 계산·입력이 구분됩니다.</span><a href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/index.html">보고서 중심 첫 화면</a><a href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/legacy-v2-dashboard.html">보존된 기존 화면</a></div>
 <div class="eyebrow" style="margin-bottom:8px">엣지알리미 · EDGE PREDICTIVE MAINTENANCE CONSOLE</div>
 
 <header>
@@ -179,19 +184,19 @@ footer{color:var(--muted);font-size:11px;margin-top:10px}
    ===================================================================== */
 const FEATURES = [
   {key:"rms",              name:"RMS",  map:"전체 진동 에너지",        color:"#3A5A98"},
-  {key:"harmonic1_energy", name:"1×",   map:"불평형 (unbalance)",      color:"#1B7A55"},
-  {key:"harmonic2_energy", name:"2×",   map:"정렬불량 (misalignment)", color:"#B87A12"},
-  {key:"harmonic3_energy", name:"3×",   map:"이완 (looseness)",        color:"#8A4FA3"},
-  {key:"high_freq_energy", name:"HF",   map:"고주파 · 보조지표",       color:"#C23A20"},
+  {key:"harmonic1_ratio", name:"1×",   map:"불평형 (unbalance)",      color:"#1B7A55"},
+  {key:"harmonic2_ratio", name:"2×",   map:"정렬불량 (misalignment)", color:"#B87A12"},
+  {key:"harmonic3_ratio", name:"3×",   map:"이완 (looseness)",        color:"#8A4FA3"},
+  {key:"high_freq_ratio", name:"HF",   map:"고주파 · 보조지표",       color:"#C23A20"},
 ];
 const SIGMA = 3.0, Z_FULL = 5.0;   /* 미터 풀스케일 5σ, 레드라인 3σ */
 
 /* ---------- 데모 시뮬레이터 (펌웨어 판정 로직의 JS 미러) ---------- */
 const demo = {
   ratedHz: 50.0,
-  base:  {rms:0.23, harmonic1_energy:0.14, harmonic2_energy:0.010, harmonic3_energy:0.004, high_freq_energy:0.002},
-  noise: {rms:0.006,harmonic1_energy:0.005,harmonic2_energy:0.0007,harmonic3_energy:0.0004,high_freq_energy:0.0002},
-  mult:  {rms:1, harmonic1_energy:1, harmonic2_energy:1, harmonic3_energy:1, high_freq_energy:1},
+  base:  {rms:0.23, harmonic1_ratio:0.14, harmonic2_ratio:0.010, harmonic3_ratio:0.004, high_freq_ratio:0.002},
+  noise: {rms:0.006,harmonic1_ratio:0.005,harmonic2_ratio:0.0007,harmonic3_ratio:0.0004,high_freq_ratio:0.0002},
+  mult:  {rms:1, harmonic1_ratio:1, harmonic2_ratio:1, harmonic3_ratio:1, high_freq_ratio:1},
   driftOn:false, stopped:false,
   mode:0, learnN:0, learnTarget:40,
   stats:null,            // {mean,std} — fit 결과
@@ -204,7 +209,7 @@ const demo = {
     return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
 
   sample(){
-    if(this.driftOn){FEATURES.forEach(f=>{if(f.key==="harmonic1_energy")this.mult[f.key]*=1.004;});}
+    if(this.driftOn){FEATURES.forEach(f=>{if(f.key==="harmonic1_ratio")this.mult[f.key]*=1.004;});}
     const f={};
     FEATURES.forEach(d=>{f[d.key]=Math.max(0,
       this.base[d.key]*this.mult[d.key]+this.noise[d.key]*this.gauss());});
@@ -419,14 +424,14 @@ document.getElementById("btnLearn").addEventListener("click",async()=>{
 document.querySelectorAll("button[data-fault]").forEach(b=>b.addEventListener("click",()=>{
   const k=b.dataset.fault;
   demo.driftOn=false; demo.stopped=false;
-  demo.mult={rms:1,harmonic1_energy:1,harmonic2_energy:1,harmonic3_energy:1,high_freq_energy:1};
+  demo.mult={rms:1,harmonic1_ratio:1,harmonic2_ratio:1,harmonic3_ratio:1,high_freq_ratio:1};
   const label={unbalance:"불평형(1× 급증)",misalign:"정렬불량(2× 급증)",
     loose:"이완(2×/3×/4× 동반 상승)",hf:"고주파 이상",drift:"완만한 열화 시작",
     stop:"설비 정지 — 오경보 없이 '정지' 상태로 표시되어야 함",none:"정상 복귀"}[k];
-  if(k==="unbalance")demo.mult.harmonic1_energy=2.2;
-  if(k==="misalign") demo.mult.harmonic2_energy=3.5;
-  if(k==="loose"){demo.mult.harmonic2_energy=1.8;demo.mult.harmonic3_energy=3.0;}
-  if(k==="hf")demo.mult.high_freq_energy=4.0;
+  if(k==="unbalance")demo.mult.harmonic1_ratio=2.2;
+  if(k==="misalign") demo.mult.harmonic2_ratio=3.5;
+  if(k==="loose"){demo.mult.harmonic2_ratio=1.8;demo.mult.harmonic3_ratio=3.0;}
+  if(k==="hf")demo.mult.high_freq_ratio=4.0;
   if(k==="drift")demo.driftOn=true;
   if(k==="stop")demo.stopped=true;
   log("데모 주입: "+label, k==="none"?"t-ok":"t-warn");

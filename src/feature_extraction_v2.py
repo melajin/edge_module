@@ -1,6 +1,9 @@
 """
 feature_extraction_v2.py — 재설계 파이프라인 (v2) 파이썬 정답 구현
 
+이 모듈은 MPU-6050 기반 V2 계산의 Python 기준 구현으로 원래 값을 유지한다.
+보고서 기본 ADXL345 + FG 구현은 별도 경로에서 관리한다.
+
 C 코어(edge_module_c/core)와 "같은 입력 → 같은 출력"이 되도록
 연산 순서·bin 인덱싱까지 C와 동일하게 맞춘 float64 기준 구현.
 (C 는 float32 라 미세 오차만 존재해야 하며, 이를 validate_v2_c 로 대조)

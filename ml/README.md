@@ -1,4 +1,8 @@
-# `ml/` 공개 데이터 학습·검증
+# 보고서 모델과 공개 데이터 학습·검증
+
+보고서의 101특징 정의와 모델 개발 경로는 [report_model/](report_model/), C 계산과 생성 모델 계수는 [../edge_module_c/report_ml/](../edge_module_c/report_ml/)에 있다. 400 Hz·400점의 선택 축 입력을 사용하는 모델의 특징 순서·표준화·마진은 [보고서 3절 해설](../docs/report-detail/03-ml-model.md)에서 상세히 설명한다. 보고서 CWRU 베어링 입력은 [../edge_module_c/report_cwru/](../edge_module_c/report_cwru/)의 12 kHz·4096점·6특징 경로에 연결한다.
+
+## 기존 6특징 개발 기록
 
 `ml/`은 CWRU와 MaFaulDa 공개 회전기계 파형을 읽어 특징을 만들고, 정상 학습형 이상 탐지와 파일 단위 지도 분류를 평가하는 Python 경로다. 계산·분할·평가 해설은 [최종보고서 상세 해설](../docs/report-detail/README.md), 결과의 단위와 분모는 [결과와 검증 범위](../docs/report-detail/06-results.md)에 연결되어 있다.
 
@@ -62,7 +66,7 @@ Mendeley 개발 평가, 실시간 입력 연결, FG 관측, CWRU 호스트 재�
 
 | 자료 | 현재 워크스페이스 위치 | 연결 내용 |
 |---|---|---|
-| 101특징 모델 개발 코드 | `D:\obsidian\claude\obsidian_export\Edge_module_folder\fault_type_90_mechanical\` | 특징 계약, trial-group 분할, 개발 평가 |
-| 실시간 101특징 ESP32 코드 | `D:\obsidian\claude\obsidian_export\Edge_module_folder\firmware_ml_evidence_live\` | 230400 baud 입력 어댑터, 20×20 DFT, 선형 모델 계수 |
-| CWRU 펌웨어·호스트 재생 | `D:\obsidian\claude\obsidian_export\Edge_module_folder\firmware_cwru_integration\` | 6특징 C 계산, 640창 비교, 600창 4/5 평가 |
+| 101특징 모델 개발 코드 | [report_model/](report_model/) | 특징 계약, trial-group 분할, 개발 평가 |
+| 실시간 101특징 C 코드 | [../edge_module_c/report_ml/](../edge_module_c/report_ml/) | 입력 어댑터, 20×20 DFT, 선형 모델 계수 |
+| CWRU 펌웨어·호스트 재생 | [../edge_module_c/report_cwru/](../edge_module_c/report_cwru/) | 6특징 C 계산, 640창 비교, 600창 4/5 보고서 평가 |
 | 상세 출처 및 보고서 원자료 | [출처·코드 대응표](../docs/report-detail/08-sources.md) | 공개 데이터 출처, 평가 원자료와 현재 코드 위치 |

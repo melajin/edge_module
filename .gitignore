@@ -15,3 +15,13 @@ ml/models/
 
 # OS
 .DS_Store
+
+# Native firmware and host-test build products
+.pio/
+.pytest_cache/
+build/
+**/build/
+*.o
+*.dll
+*.so
+*.exe

@@ -1,6 +1,38 @@
-# V2 C 코어와 ESP32 펌웨어
+# 보고서 기준 C 계산과 ESP32 펌웨어
 
-이 폴더는 엣지알리미 V2의 공통 C 계산 코어와 ESP32 Arduino 펌웨어를 담는다. 시스템 전체의 데이터 흐름과 보고서 대응은 [최종보고서 상세 해설](../docs/report-detail/README.md), 구현 버전과 외부 원본 위치는 [상위 README](../README.md)에 연결되어 있다.
+이 폴더의 첫 실행 경로는 최종보고서의 ADXL345·FG V3 펌웨어다. 보고서의 센서 입력과 계산 순서를 [상세 해설](../docs/report-detail/README.md)에 연결하고, 물리 근거·101특징·CWRU는 각 입력 계약을 가진 계산 묶음으로 제공한다.
+
+## 보고서의 실행 경로
+
+| 경로 | 보고서와 연결한 계산 |
+|---|---|
+| [esp32/edge_alimi_adxl345_fg_report/](esp32/edge_alimi_adxl345_fg_report/) | ADXL345 3축·512표본·400 Hz 설정, FG 회전 동기 1× 진폭·위상, 정상 기준과 4/5 상태, 115200 baud JSON |
+| [report_physical/](report_physical/) | 512점 주기형 Hann·g² 전력·로그 중앙값/MAD·후보 근거 |
+| [report_ml/](report_ml/) | 400점·101특징·생성된 선형 모델 계수·네 클래스 마진 |
+| [report_cwru/](report_cwru/) | 12 kHz·4096점·6특징·네 클래스·4/5 베어링 분석 |
+| [../src/report_reference/](../src/report_reference/) | 보고서 C 계산에 대응하는 Python 기준 |
+| [../ml/report_model/](../ml/report_model/) | 101특징의 Python 정의와 모델 개발 경로 |
+
+보고서 FG 펌웨어는 다음 순서로 빌드한다.
+
+```powershell
+cd edge_module_c/esp32/edge_alimi_adxl345_fg_report
+python -m platformio run
+```
+
+입력 설정은 ADXL345 `0x53`, 400 Hz·±4 g·256 LSB/g, SDA 21·SCL 22·I²C 400 kHz, FG GPIO 25다. 실제 창의 표본 시각과 FG 간격을 검사한 뒤 동기 1×를 계산하며, 정상 기준과 위상 이력으로 상태를 반환한다. `reason`, `fs_hz`, `fg_hz`, `rpm`, `amp_1x_g`, `ratio_1x`, `imbalance`, `imbalance_votes`는 보고서 기록을 읽는 주요 JSON 필드다. 학습·PPR·일시정지 명령과 기준 저장은 해당 프로젝트의 소스와 [FG 해설](../docs/report-detail/05-fg-hardware.md)에 연결한다.
+
+결과 수집은 [pi/report_serial_logger.py](pi/report_serial_logger.py)가 115200 baud 시리얼 JSON을 JSONL로 저장하며, 공개 첫 화면에서 해당 기록을 불러 읽는다. 보고서의 정상 팬 336창·333/336 회전수 오차 3% 이내 기록과 이번 소프트웨어 실행 결과는 [결과 해설](../docs/report-detail/06-results.md)에 구분해 남긴다.
+
+```powershell
+python edge_module_c/pi/report_serial_logger.py --port COM3 --output outputs/fg-report.jsonl
+```
+
+이 수집 명령은 저장소 루트에서 실행하며 포트는 장치에 연결된 값으로 지정한다.
+
+## 이전 V2 계산과 운영 기록
+
+아래 내용은 이전 `core/`와 `esp32/edge_alimi/`의 MPU-6050 V2 구현 계약이다. 보고서 FG 경로와의 수식 비교 및 기존 정상 학습·HTTP 운영 기록을 보존한다.
 
 ## 데이터 흐름과 계산 계약
 
@@ -51,14 +83,14 @@ V2 계산 상세는 [물리 근거 경로 해설](../docs/report-detail/02-physi
 
 | 구현 경로 | 입력·계산 조건 | 기록된 연결 정보 |
 |---|---|---|
-| FG V3 보고서 검증 사본 | 512표본, 창별 표본 시각, 1× 동기 진폭·위상 | 115200 baud, 정상 팬 336창 관측. 워크스페이스 원본 `D:\obsidian\claude\obsidian_export\Edge_module_folder\reports\algorithm-report-audit-2026-09-26\execution\firmware-build\` |
+| FG V3 보고서 검증 사본 | 512표본, 창별 표본 시각, 1× 동기 진폭·위상 | 115200 baud, 정상 팬 336창의 보고서 관측. [보존 소스](esp32/edge_alimi_adxl345_fg_report/source_snapshot/) |
 | 물리 근거 코어 | 512표본 X/Y/Z, 창별 실제 `fs`·FG 주파수, 정상 336창의 로그 중앙값/MAD | 신뢰 상한 `min(160 Hz, 0.4·fs)`, 가용 상태·후보 근거 계산 |
 | 101특징 ML | 512표본 실시간 입력을 timestamp 기준 400점·400 Hz로 보간, 선택 축과 FG RPM 사용 | 101특징, 20×20 DFT 분해, 접은 선형 weight/bias, 230400 baud |
 | CWRU 베어링 분류 | 4096표본, 12000 Hz, 6특징·네 클래스 | 호스트 재생에서 640창 특징·점수 비교, 40창 초기 이력 뒤 600창 4/5 평가 |
 
-최신 물리·ML·CWRU 원본은 워크스페이스 경로 `D:\obsidian\claude\obsidian_export\Edge_module_folder\fault_evidence_core\`, `D:\obsidian\claude\obsidian_export\Edge_module_folder\firmware_ml_evidence_live\`, `D:\obsidian\claude\obsidian_export\Edge_module_folder\firmware_cwru_integration\`에 있다. 101특징 학습 원본은 `D:\obsidian\claude\obsidian_export\Edge_module_folder\fault_type_90_mechanical\`이다. 구현별 함수·수식·평가 분모는 [상세 해설](../docs/report-detail/README.md)과 [코드 대응표](../docs/report-detail/08-sources.md)에서 확인할 수 있다.
+물리·ML·CWRU는 이 폴더의 `report_physical/`, `report_ml/`, `report_cwru/`에 있으며, 101특징 Python 정의는 `../ml/report_model/`에 있다. 구현별 함수·수식·평가 분모는 [상세 해설](../docs/report-detail/README.md)과 [코드 대응표](../docs/report-detail/08-sources.md)에서 확인할 수 있다.
 
-## 갱신 작업
+## 이전 V2 사본 갱신
 
 - 공통 코어 수정 후 `bash sync_core.sh`로 ESP32 스케치 사본을 맞춘다.
 - 대시보드 수정 후 `python tools/embed_dashboard.py`로 내장 자산을 만들고 `../docs/` 배포 사본을 갱신한다.

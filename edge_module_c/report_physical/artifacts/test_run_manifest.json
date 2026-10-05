@@ -1,0 +1,113 @@
+{
+  "run_utc": "2026-10-01T23:43:14.1310346Z",
+  "working_directory": "D:\\obsidian\\claude\\obsidian_export\\Edge_module_folder\\fault_evidence_core",
+  "scope": "Code inspection and host software/synthetic signal tests; no hardware measurements",
+  "gcc_version": "gcc.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0",
+  "gpp_version": "g++.exe (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r3) 16.1.0",
+  "commands": [
+    {
+      "executable": "gcc",
+      "arguments": [
+        "-std=c99",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I",
+        "include",
+        "src/fault_evidence.c",
+        "tests/test_fault_evidence.c",
+        "-lm",
+        "-o",
+        "build/test_fault_evidence.exe"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "executable": "./build/test_fault_evidence.exe",
+      "arguments": [
+        "artifacts/host_test_results.json"
+      ],
+      "exit_code": 0,
+      "output": "25 cases, 2926 assertions, 0 failures"
+    },
+    {
+      "executable": "gcc",
+      "arguments": [
+        "-std=c99",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I",
+        "include",
+        "-c",
+        "src/fault_evidence.c",
+        "-o",
+        "build/fault_evidence.o"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "executable": "g++",
+      "arguments": [
+        "-std=c++11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I",
+        "include",
+        "tests/test_cpp_header.cpp",
+        "build/fault_evidence.o",
+        "-lm",
+        "-o",
+        "build/test_cpp_header.exe"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "executable": "./build/test_cpp_header.exe",
+      "arguments": [],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "executable": "g++",
+      "arguments": [
+        "-std=c++11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-pedantic",
+        "-I",
+        "include",
+        "-x",
+        "c++",
+        "src/fault_evidence.c",
+        "tests/test_fault_evidence.c",
+        "-lm",
+        "-o",
+        "build/test_fault_evidence_cpp.exe"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "executable": "./build/test_fault_evidence_cpp.exe",
+      "arguments": [
+        "artifacts/cpp_host_test_results.json"
+      ],
+      "exit_code": 0,
+      "output": "25 cases, 2926 assertions, 0 failures"
+    }
+  ],
+  "passed": true
+}

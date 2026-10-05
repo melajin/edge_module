@@ -1,6 +1,10 @@
 /*
  * em_config.h — 엣지알리미 공통 설정
  *
+ * Legacy V2 MPU-6050/1024-point/5-feature configuration; values stay frozen
+ * with their original implementation. The report-default ADXL345 + FG build
+ * is maintained independently at esp32/edge_alimi_adxl345_fg_report/.
+ *
  * [범용성 원칙]
  *  - 테스트 데이터가 없어도 어떤 회전 설비에든 붙일 수 있도록,
  *    설비 의존 값은 전부 이 구조체 하나로 모은다.

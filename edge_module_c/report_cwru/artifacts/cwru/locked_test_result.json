@@ -1,0 +1,98 @@
+{
+  "identity": "d6a774279a9930d3b289dfba69f5ce5048e2c61ebe8aa2623a31a43d0a427b0c",
+  "model_sha256": "6a4bfb1d803bde044dbe28080c452c256047c736a1c984c38781c850c4849ee5",
+  "metrics": {
+    "accuracy": 0.9078125,
+    "balanced_accuracy": 0.9138661601402689,
+    "macro_f1": 0.9145041299442904,
+    "classes": [
+      "ball",
+      "inner_race",
+      "normal",
+      "outer_race"
+    ],
+    "confusion_matrix": [
+      [
+        145,
+        29,
+        0,
+        0
+      ],
+      [
+        0,
+        168,
+        0,
+        6
+      ],
+      [
+        0,
+        0,
+        116,
+        2
+      ],
+      [
+        19,
+        3,
+        0,
+        152
+      ]
+    ],
+    "n_evaluated": 640,
+    "classification_report": {
+      "ball": {
+        "precision": 0.8841463414634146,
+        "recall": 0.8333333333333334,
+        "f1-score": 0.8579881656804734,
+        "support": 174.0
+      },
+      "inner_race": {
+        "precision": 0.84,
+        "recall": 0.9655172413793104,
+        "f1-score": 0.8983957219251337,
+        "support": 174.0
+      },
+      "normal": {
+        "precision": 1.0,
+        "recall": 0.9830508474576272,
+        "f1-score": 0.9914529914529915,
+        "support": 118.0
+      },
+      "outer_race": {
+        "precision": 0.95,
+        "recall": 0.8735632183908046,
+        "f1-score": 0.9101796407185628,
+        "support": 174.0
+      },
+      "accuracy": 0.9078125,
+      "macro avg": {
+        "precision": 0.9185365853658536,
+        "recall": 0.9138661601402689,
+        "f1-score": 0.9145041299442904,
+        "support": 640.0
+      },
+      "weighted avg": {
+        "precision": 0.9114085365853658,
+        "recall": 0.9078125,
+        "f1-score": 0.9077711045622789,
+        "support": 640.0
+      }
+    }
+  },
+  "feature_counts": {
+    "attempted": 640,
+    "nonfinite_excluded": 0,
+    "accepted": 640
+  },
+  "test_units": [
+    "cwru:106.mat",
+    "cwru:107.mat",
+    "cwru:119.mat",
+    "cwru:185.mat",
+    "cwru:199.mat",
+    "cwru:200.mat",
+    "cwru:211.mat",
+    "cwru:222.mat",
+    "cwru:237.mat",
+    "cwru:97.mat"
+  ]
+}

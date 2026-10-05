@@ -277,11 +277,11 @@ $$
 
 CWRU 잠금 시험은 10개 파일에서 640 분석창을 구성했다. Python/C 특징·점수 parity는 640창 전체에서 비교했고, 세부 클래스 정답은 581/640(90.78%)이다. 파일마다 첫 4창씩 40창이 투표 초기 이력으로 쓰여 4/5 이진 판정 분모는 600창이며, 고장 486/486창 탐지와 정상 0/114창 확정 오경보를 기록했다.
 
-근거 코드는 현재 위치 `firmware_cwru_integration/src/em_cwru.c`의 `em_cwru_features()`, `em_cwru_predict()`, `em_cwru_vote_update()`와 `include/em_cwru.h`다. CWRU 실행 결과는 이 경로의 기록으로 정리된다.
+근거 코드는 현재 위치 `edge_module_c/report_cwru/src/em_cwru.c`의 `em_cwru_features()`, `em_cwru_predict()`, `em_cwru_vote_update()`와 `include/em_cwru.h`다. CWRU 실행 결과는 이 경로의 기록으로 정리된다.
 
 ## 코드·수식 근거
 
-- 정확한 feature 이름·배열 순서와 fold provenance: 현재 위치 `fault_type_90_mechanical/a_features.py`, `fault_type_90_mechanical/a_group_develop.py`, `output/fault_type_90_mechanical_group_20261002/candidates/limited400__single_ch2__extended__linear_c1/feature_contract.json`, `fit_provenance.json`, `firmware_ml_evidence_live/verification/model_provenance.json`.
-- 정의·순서·모델 마진: 로컬 `firmware_ml_evidence_live/src/ml_reference.c`의 `psd()`(47~53행), `ml_reference_extract()`(55~92행), `ml_reference_predict()`(94~102행); `tools/export_model.py`(18~24행); `src/ml_live.c`(6~35행).
-- 구현과 개발 결과 요약: 로컬 `firmware_ml_evidence_live/README_KO.md`, `verification/ml_parity.json`, `verification/live_parity.json`, `output/fault_type_90_mechanical_group_20261002/SUMMARY_KO.md`.
-- 현재 위치: `firmware_ml_evidence_live/src/ml_reference.c`, `firmware_ml_evidence_live/src/ml_live.c`, `firmware_ml_evidence_live/tools/verify_ml.py`, `fault_type_90_mechanical/`, `output/fault_type_90_mechanical_group_20261002/`, `firmware_cwru_integration/`.
+- 정확한 feature 이름·배열 순서와 fold provenance: `ml/report_model/a_features.py`, `ml/report_model/a_group_develop.py`, `edge_module_c/report_ml/verification/source_candidate/feature_contract.json`, 같은 폴더의 `fit_provenance.json`, `edge_module_c/report_ml/verification/model_provenance.json`.
+- 정의·순서·모델 마진: 로컬 `edge_module_c/report_ml/src/ml_reference.c`의 `psd()`(47~53행), `ml_reference_extract()`(55~92행), `ml_reference_predict()`(94~102행); `tools/export_model.py`(18~24행); `src/ml_live.c`(6~35행).
+- 구현과 개발 결과 요약: `edge_module_c/report_ml/README.md`와 이 묶음의 `verification/`; 원본 개발 기록은 워크스페이스 `output/fault_type_90_mechanical_group_20261002/SUMMARY_KO.md`에 보관한다.
+- 현재 위치: `edge_module_c/report_ml/src/ml_reference.c`, `edge_module_c/report_ml/src/ml_live.c`, `edge_module_c/report_ml/tools/verify_ml.py`, `ml/report_model/`, `output/fault_type_90_mechanical_group_20261002/`, `edge_module_c/report_cwru/`.

@@ -60,7 +60,7 @@ ESP32 두 빌드의 링크 결과는 정적 RAM과 플래시 사용량으로 기
 ## 근거 파일
 
 - 원 수치: 제출 최종보고서 16~19쪽 표 9~12.
-- CWRU 호스트 재생·결과: 현재 위치 `firmware_cwru_integration/verification/result.json`, 창별 입력 `locked_windows.csv`; 통합 설명 `reports/2026-10-01-cwru-firmware-integration-ko.md`.
+- CWRU 호스트 재생·결과: 현재 위치 `edge_module_c/report_cwru/verification/result.json`, 창별 입력 `locked_windows.csv`; 통합 설명 `reports/2026-10-01-cwru-firmware-integration-ko.md`.
 - B02~B04 시간 구간 대리 라벨 평가 요약: 현재 위치 `reports/2026-09-23-b01-b04-ac-rms-bearing-ko.md`, `reports/final-report-evidence/faults.md`.
 - 4상태 모델 평가와 입력별 계산 경로는 [학습 모델](03-ml-model.md), 상세 인용은 [출처와 코드 대응표](08-sources.md)를 참조한다.
 

@@ -1,0 +1,77 @@
+{
+  "source": "reports/algorithm-report-audit-2026-09-26/execution/firmware-build",
+  "source_snapshot": {
+    "edge_alimi_adxl345_v3.ino": {
+      "bytes": 25181,
+      "sha256": "71d99c2741274712fbe5c5c63ba130fb3032a535377e0236e59722cffd92903e",
+      "report_snapshot_sha256": "71d99c2741274712fbe5c5c63ba130fb3032a535377e0236e59722cffd92903e"
+    },
+    "em_v3.c": {
+      "bytes": 3614,
+      "sha256": "276e840006294537a87f178e6b2fe3c9b9e2d74d636380567ab5e5c9e6c1f2e2",
+      "report_snapshot_sha256": "276e840006294537a87f178e6b2fe3c9b9e2d74d636380567ab5e5c9e6c1f2e2"
+    },
+    "em_v3.h": {
+      "bytes": 1749,
+      "sha256": "aad2ec26697c0cfa8ad1e922a5bd54c2ce71171225ecfb81fe6b6d184fa323a8",
+      "report_snapshot_sha256": "aad2ec26697c0cfa8ad1e922a5bd54c2ce71171225ecfb81fe6b6d184fa323a8"
+    },
+    "platformio.ini": {
+      "bytes": 136,
+      "sha256": "a37ec8ff03629c3940036b443bf681b971714be4637a9ee88882b286ff21efc9",
+      "report_snapshot_sha256": "a37ec8ff03629c3940036b443bf681b971714be4637a9ee88882b286ff21efc9"
+    },
+    "test_signal.c": {
+      "bytes": 6814,
+      "sha256": "a0d54aba80ed277ea4242f03bf1974cad39438432ae52ccfe431cee7a6a784fa",
+      "report_snapshot_sha256": "a0d54aba80ed277ea4242f03bf1974cad39438432ae52ccfe431cee7a6a784fa"
+    },
+    "v3_signal.c": {
+      "bytes": 7289,
+      "sha256": "5b77be8056b55bec18a66b3ccb70507b2eb951bf2122b2b386f5c08ce311e5bb",
+      "report_snapshot_sha256": "5b77be8056b55bec18a66b3ccb70507b2eb951bf2122b2b386f5c08ce311e5bb"
+    },
+    "v3_signal.h": {
+      "bytes": 1829,
+      "sha256": "45fa79175693cd1fdd8af4d68335636976d0a90137ae2f3b07ecd7564ed5760b",
+      "report_snapshot_sha256": "45fa79175693cd1fdd8af4d68335636976d0a90137ae2f3b07ecd7564ed5760b"
+    }
+  },
+  "build_source_copies": {
+    "src/main.cpp": {
+      "source_snapshot": "source_snapshot/edge_alimi_adxl345_v3.ino",
+      "sha256": "71d99c2741274712fbe5c5c63ba130fb3032a535377e0236e59722cffd92903e"
+    },
+    "src/em_v3.c": {
+      "source_snapshot": "source_snapshot/em_v3.c",
+      "sha256": "276e840006294537a87f178e6b2fe3c9b9e2d74d636380567ab5e5c9e6c1f2e2"
+    },
+    "src/em_v3.h": {
+      "source_snapshot": "source_snapshot/em_v3.h",
+      "sha256": "aad2ec26697c0cfa8ad1e922a5bd54c2ce71171225ecfb81fe6b6d184fa323a8"
+    },
+    "src/v3_signal.c": {
+      "source_snapshot": "source_snapshot/v3_signal.c",
+      "sha256": "5b77be8056b55bec18a66b3ccb70507b2eb951bf2122b2b386f5c08ce311e5bb"
+    },
+    "src/v3_signal.h": {
+      "source_snapshot": "source_snapshot/v3_signal.h",
+      "sha256": "45fa79175693cd1fdd8af4d68335636976d0a90137ae2f3b07ecd7564ed5760b"
+    }
+  },
+  "test_copy": {
+    "tests/test_signal.c": {
+      "source_snapshot": "source_snapshot/test_signal.c",
+      "sha256": "a0d54aba80ed277ea4242f03bf1974cad39438432ae52ccfe431cee7a6a784fa"
+    }
+  },
+  "build_config": {
+    "platformio.ini": {
+      "sha256": "1d47a877a55c5d8930e1d739ea11438571c30e552d2c2cc63f3e6786f0ebdfa3",
+      "role": "independent src/ build; exact upstream config retained in source_snapshot/platformio.ini"
+    }
+  },
+  "generated_model_headers": {
+    "role": "checked-in report coefficients and lookup tables; runnable build does not require fold joblib files or raw dataset"
+  }
+}

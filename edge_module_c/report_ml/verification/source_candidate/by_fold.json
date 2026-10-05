@@ -1,0 +1,342 @@
+[
+  {
+    "fold": 0,
+    "classes": {
+      "normal": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "imbalance": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "misalignment": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "mechanical_looseness": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      }
+    },
+    "confusion": [
+      [
+        60,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        60,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        60
+      ]
+    ],
+    "labels": [
+      "normal",
+      "imbalance",
+      "misalignment",
+      "mechanical_looseness"
+    ],
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "minimum_precision_recall": 1.0,
+    "strict_90_all_classes": true,
+    "normal_false_positive_rate": 0.0,
+    "coverage": 1.0,
+    "n": 240
+  },
+  {
+    "fold": 1,
+    "classes": {
+      "normal": {
+        "precision": 0.7228915662650602,
+        "recall": 1.0,
+        "f1": 0.8391608391608392,
+        "support": 60
+      },
+      "imbalance": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "misalignment": {
+        "precision": 1.0,
+        "recall": 0.8166666666666667,
+        "f1": 0.8990825688073395,
+        "support": 60
+      },
+      "mechanical_looseness": {
+        "precision": 1.0,
+        "recall": 0.8,
+        "f1": 0.8888888888888888,
+        "support": 60
+      }
+    },
+    "confusion": [
+      [
+        60,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0,
+        0
+      ],
+      [
+        11,
+        0,
+        49,
+        0
+      ],
+      [
+        12,
+        0,
+        0,
+        48
+      ]
+    ],
+    "labels": [
+      "normal",
+      "imbalance",
+      "misalignment",
+      "mechanical_looseness"
+    ],
+    "accuracy": 0.9041666666666667,
+    "macro_f1": 0.9067830742142668,
+    "minimum_precision_recall": 0.7228915662650602,
+    "strict_90_all_classes": false,
+    "normal_false_positive_rate": 0.0,
+    "coverage": 1.0,
+    "n": 240
+  },
+  {
+    "fold": 2,
+    "classes": {
+      "normal": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "imbalance": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "misalignment": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "mechanical_looseness": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      }
+    },
+    "confusion": [
+      [
+        60,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        60,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        60
+      ]
+    ],
+    "labels": [
+      "normal",
+      "imbalance",
+      "misalignment",
+      "mechanical_looseness"
+    ],
+    "accuracy": 1.0,
+    "macro_f1": 1.0,
+    "minimum_precision_recall": 1.0,
+    "strict_90_all_classes": true,
+    "normal_false_positive_rate": 0.0,
+    "coverage": 1.0,
+    "n": 240
+  },
+  {
+    "fold": 3,
+    "classes": {
+      "normal": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 60
+      },
+      "imbalance": {
+        "precision": 0.759493670886076,
+        "recall": 1.0,
+        "f1": 0.8633093525179856,
+        "support": 60
+      },
+      "misalignment": {
+        "precision": 0.967741935483871,
+        "recall": 1.0,
+        "f1": 0.9836065573770492,
+        "support": 60
+      },
+      "mechanical_looseness": {
+        "precision": 1.0,
+        "recall": 0.65,
+        "f1": 0.7878787878787878,
+        "support": 60
+      }
+    },
+    "confusion": [
+      [
+        60,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        60,
+        0
+      ],
+      [
+        0,
+        19,
+        2,
+        39
+      ]
+    ],
+    "labels": [
+      "normal",
+      "imbalance",
+      "misalignment",
+      "mechanical_looseness"
+    ],
+    "accuracy": 0.9125,
+    "macro_f1": 0.9086986744434558,
+    "minimum_precision_recall": 0.65,
+    "strict_90_all_classes": false,
+    "normal_false_positive_rate": 0.0,
+    "coverage": 1.0,
+    "n": 240
+  },
+  {
+    "fold": 4,
+    "classes": {
+      "normal": {
+        "precision": 0.6593406593406593,
+        "recall": 1.0,
+        "f1": 0.7947019867549668,
+        "support": 60
+      },
+      "imbalance": {
+        "precision": 0.9836065573770492,
+        "recall": 1.0,
+        "f1": 0.9917355371900827,
+        "support": 60
+      },
+      "misalignment": {
+        "precision": 1.0,
+        "recall": 0.48333333333333334,
+        "f1": 0.651685393258427,
+        "support": 60
+      },
+      "mechanical_looseness": {
+        "precision": 1.0,
+        "recall": 0.9833333333333333,
+        "f1": 0.9915966386554622,
+        "support": 60
+      }
+    },
+    "confusion": [
+      [
+        60,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        60,
+        0,
+        0
+      ],
+      [
+        31,
+        0,
+        29,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        59
+      ]
+    ],
+    "labels": [
+      "normal",
+      "imbalance",
+      "misalignment",
+      "mechanical_looseness"
+    ],
+    "accuracy": 0.8666666666666667,
+    "macro_f1": 0.8574298889647347,
+    "minimum_precision_recall": 0.48333333333333334,
+    "strict_90_all_classes": false,
+    "normal_false_positive_rate": 0.0,
+    "coverage": 1.0,
+    "n": 240
+  }
+]

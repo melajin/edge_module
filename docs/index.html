@@ -1,477 +1,138 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>엣지알리미 — 설비 감시 콘솔</title>
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#1F241C">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="엣지알리미">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<style>
-/* ============================================================
-   디자인: 현장 계기판(instrument panel) 무드의 라이트 패널.
-   시그니처 = 타워램프(stack light) + 지표별 z-score VU 미터.
-   데이터 값은 전부 모노스페이스 — 계측기의 언어.
-   폰트는 시스템 스택 (현장/오프라인 데모에서 외부 의존 없음)
-   ============================================================ */
-:root {
-  --base:#ECEEEA; --panel:#F8F9F7; --line:#CBD0C8; --ink:#1F241C;
-  --muted:#6B7265; --ok:#1B7A55; --warn:#B87A12; --alarm:#C23A20;
-  --mono:ui-monospace,'Cascadia Mono','Noto Sans Mono',Consolas,monospace;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--base);color:var(--ink);
-  font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;
-  font-size:14px;line-height:1.5;padding:20px;max-width:1100px;margin:0 auto}
-.eyebrow{font-size:11px;letter-spacing:.14em;color:var(--muted);
-  text-transform:uppercase;font-weight:600}
-.mono{font-family:var(--mono)}
-
-/* ---- 상단 상태 보드 ---- */
-header{display:flex;gap:16px;align-items:stretch;margin-bottom:14px}
-.lamp-col{display:flex;flex-direction:column;gap:6px;padding:12px 10px;
-  background:var(--panel);border:1px solid var(--line);border-radius:6px}
-.lamp{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);
-  background:#E3E5E1;transition:background .3s, box-shadow .3s}
-.lamp.on-alarm{background:var(--alarm);box-shadow:0 0 12px 2px rgba(198,58,32,.55)}
-.lamp.on-warn {background:var(--warn); box-shadow:0 0 10px 2px rgba(184,122,18,.5)}
-.lamp.on-ok   {background:var(--ok);   box-shadow:0 0 10px 2px rgba(27,122,85,.45)}
-.status-main{flex:1;background:var(--panel);border:1px solid var(--line);
-  border-radius:6px;padding:12px 18px;display:flex;flex-direction:column;justify-content:center}
-#statusText{font-size:26px;font-weight:700;letter-spacing:-.01em}
-#statusSub{color:var(--muted);font-size:13px}
-.status-side{display:grid;grid-template-columns:1fr 1fr;gap:8px;min-width:280px}
-.cell{background:var(--panel);border:1px solid var(--line);border-radius:6px;
-  padding:8px 12px}
-.cell b{display:block;font-size:20px;font-weight:600;font-family:var(--mono)}
-
-/* ---- 제어부 ---- */
-.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
-  background:var(--panel);border:1px solid var(--line);border-radius:6px;
-  padding:10px 12px;margin-bottom:14px}
-button{border:1px solid var(--line);background:#fff;color:var(--ink);
-  border-radius:4px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit}
-button:hover{border-color:var(--ink)}
-button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
-button:focus-visible{outline:2px solid var(--ok);outline-offset:1px}
-button.fault{border-color:#D8B79E}
-input[type=text]{border:1px solid var(--line);border-radius:4px;
-  padding:6px 8px;font-family:var(--mono);font-size:12px;width:190px}
-.sep{width:1px;height:24px;background:var(--line);margin:0 4px}
-label.toggle{display:flex;gap:6px;align-items:center;cursor:pointer}
-
-/* ---- 본문 그리드 ---- */
-.grid{display:grid;grid-template-columns:380px 1fr;gap:14px;margin-bottom:14px}
-@media(max-width:820px){.grid{grid-template-columns:1fr}}
-section{background:var(--panel);border:1px solid var(--line);
-  border-radius:6px;padding:14px 16px}
-section h2{font-size:12px;letter-spacing:.12em;color:var(--muted);
-  font-weight:600;margin-bottom:12px;text-transform:uppercase}
-
-/* ---- 지표 VU 미터 ---- */
-.meter{margin-bottom:13px}
-.meter .row1{display:flex;justify-content:space-between;align-items:baseline}
-.meter .fname{font-weight:600;font-size:13px}
-.meter .fmap{color:var(--muted);font-size:11px;margin-left:6px}
-.meter .zval{font-family:var(--mono);font-size:13px}
-.bar{position:relative;height:14px;background:#E6E8E4;border-radius:3px;
-  margin-top:4px;overflow:hidden}
-.bar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--ok);
-  border-radius:3px;transition:width .25s, background .25s}
-.bar .redline{position:absolute;top:-2px;bottom:-2px;width:2px;
-  background:var(--alarm);left:60%}
-.bar-scale{display:flex;justify-content:space-between;font-size:10px;
-  color:var(--muted);font-family:var(--mono);margin-top:2px}
-
-/* ---- 추세 ---- */
-canvas{width:100%;height:260px;display:block}
-.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px}
-.legend span{display:inline-flex;align-items:center;gap:5px}
-.swatch{width:14px;height:3px;border-radius:2px;display:inline-block}
-
-/* ---- 로그 ---- */
-#log{font-family:var(--mono);font-size:12px;max-height:180px;
-  overflow-y:auto;white-space:pre-wrap}
-#log .t-alarm{color:var(--alarm)} #log .t-warn{color:var(--warn)}
-#log .t-ok{color:var(--ok)} #log .t-info{color:var(--muted)}
-footer{color:var(--muted);font-size:11px;margin-top:10px}
-@media(max-width:640px){
-  body{padding:12px}
-  header{flex-wrap:wrap}
-  .status-side{grid-template-columns:1fr 1fr;min-width:100%}
-  #statusText{font-size:21px}
-  .controls{gap:6px}
-  input[type=text]{width:100%}
-}
-@media (prefers-reduced-motion: reduce){*{transition:none!important}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f1">
+  <title>엣지알리미 보고서 · 계산 · 구현</title>
+  <style>
+    :root{color-scheme:light;--paper:#f5f6f1;--card:#fff;--ink:#202b27;--muted:#5f7069;--line:#d9e1da;--green:#176a50;--green-soft:#e6f2ec;--blue:#265b8a;--amber:#9a5a13;--red:#a43f32;--mono:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,monospace}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif}
+    main{width:min(1080px,100% - 36px);margin:0 auto;padding:56px 0 72px}.eyebrow{color:var(--green);font-size:.76rem;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+    h1,h2,h3,p{margin-top:0}h1{max-width:760px;margin:14px 0;font-size:clamp(2.3rem,6vw,4.6rem);line-height:1.08;letter-spacing:-.055em}h2{font-size:1.5rem;line-height:1.25;letter-spacing:-.025em;margin-bottom:9px}h3{font-size:1rem;margin-bottom:8px}
+    p{color:var(--muted)}a{color:var(--blue);text-underline-offset:3px}a:hover{color:var(--green)}.lede{max-width:720px;font-size:1.12rem}.hero{padding:0 0 30px}.hero-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}.button{display:inline-flex;align-items:center;min-height:42px;padding:8px 14px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-weight:700;text-decoration:none}.button.primary{color:#fff;background:var(--green);border-color:var(--green)}
+    .specs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0 42px}.spec{padding:15px 16px;background:var(--green-soft);border:1px solid #d0e4d8;border-radius:9px}.spec span{display:block;color:var(--muted);font-size:.78rem}.spec strong{display:block;margin-top:4px;font-size:1rem}
+    section{margin:46px 0}.section-head{max-width:720px;margin-bottom:18px}.pathways,.chapters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{padding:19px 20px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.card p:last-child{margin-bottom:0}.card .tag{display:inline-block;margin-bottom:10px;padding:3px 8px;border-radius:20px;background:var(--green-soft);color:var(--green);font-size:.75rem;font-weight:750}.card a{font-weight:650}
+    .chapter{display:flex;gap:14px;align-items:flex-start;padding:16px;border:1px solid var(--line);border-radius:9px;background:var(--card);text-decoration:none}.chapter:hover{border-color:#8ebda7}.number{flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--green-soft);color:var(--green);font:700 .88rem var(--mono)}.chapter strong{display:block;color:var(--ink)}.chapter small{display:block;margin-top:2px;color:var(--muted);font-size:.84rem}
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:9px;background:var(--card)}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#eef2ed;color:var(--muted);font-size:.8rem;font-weight:750}tr:last-child td{border-bottom:0}code,.mono{font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere}.note{padding:15px 17px;border-left:3px solid var(--green);background:var(--green-soft);border-radius:0 8px 8px 0;color:#36564a}
+    .import-box{padding:20px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.file-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.file-row input{max-width:100%;font:inherit}.import-status{margin:13px 0 8px;color:var(--muted);font-size:.9rem}.errors{margin:0 0 12px;color:var(--red);font-size:.9rem}.record-table{min-width:900px;font-size:.88rem}.record-table td{font-family:var(--mono);font-size:.82rem}.record-table td.source{font-family:inherit;white-space:nowrap}.raw-record{max-width:380px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem}.empty{padding:22px;color:var(--muted);text-align:center}.archive{display:flex;flex-wrap:wrap;gap:15px;align-items:center;justify-content:space-between}
+    footer{padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}.source-link{font-family:var(--mono);font-size:.84rem}
+    @media(max-width:760px){main{width:min(100% - 26px,1080px);padding-top:36px}.specs{grid-template-columns:repeat(2,1fr)}.pathways,.chapters{grid-template-columns:1fr}.archive{align-items:flex-start}}
+    @media(max-width:420px){.specs{grid-template-columns:1fr 1fr;gap:7px}.spec{padding:12px}.spec strong{font-size:.9rem}th,td{padding:10px}}
+  </style>
 </head>
 <body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">Edge Alimi · report-aligned implementation</div>
+    <h1>보고서에서 계산과 구현으로</h1>
+    <p class="lede">최종보고서의 입력 조건과 계산 흐름을 8절 상세 해설, 소스 코드, 검증 기록에 연결합니다. 물리 근거, 101특징 모델, CWRU 베어링 경로는 각자의 입력과 평가 범위로 안내합니다.</p>
+    <div class="hero-links">
+      <a class="button primary" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/README.md">상세 해설 목차 열기</a>
+      <a class="button" href="https://github.com/melajin/edge_module/tree/v2-ratio-features">소스 저장소 보기</a>
+    </div>
+  </header>
 
-<div class="eyebrow" style="margin-bottom:8px">엣지알리미 · EDGE PREDICTIVE MAINTENANCE CONSOLE</div>
-
-<header>
-  <div class="lamp-col" title="타워램프: 이상 / 드리프트 주의 / 정상">
-    <div class="lamp" id="lampAlarm"></div>
-    <div class="lamp" id="lampWarn"></div>
-    <div class="lamp" id="lampOk"></div>
+  <div class="specs" aria-label="보고서 입력 조건">
+    <div class="spec"><span>가속도 입력</span><strong>ADXL345 · 3축</strong></div>
+    <div class="spec"><span>물리 분석 창</span><strong>512 표본 · 약 1.28초</strong></div>
+    <div class="spec"><span>보고서 명목 표본율</span><strong>400 Hz</strong></div>
+    <div class="spec"><span>FG 보고서 JSON</span><strong>115200 baud</strong></div>
   </div>
-  <div class="status-main">
-    <div id="statusText">대기</div>
-    <div id="statusSub">학습을 시작하면 이 설비의 정상 기준선을 스스로 만듭니다.</div>
-  </div>
-  <div class="status-side">
-    <div class="cell"><span class="eyebrow">회전수 추정</span><b id="rotHz">--.- Hz</b></div>
-    <div class="cell"><span class="eyebrow">환산 RPM</span><b id="rotRpm">----</b></div>
-    <div class="cell"><span class="eyebrow">모드</span><b id="modeTxt" style="font-size:14px">IDLE</b></div>
-    <div class="cell"><span class="eyebrow">데이터 소스</span><b id="srcTxt" style="font-size:14px">데모</b></div>
-  </div>
-</header>
 
-<div class="controls">
-  <label class="toggle"><input type="radio" name="src" value="demo" checked> 데모 시뮬레이터</label>
-  <label class="toggle"><input type="radio" name="src" value="live"> 실장비(ESP32)</label>
-  <input type="text" id="espUrl" value="http://192.168.0.42" aria-label="ESP32 주소">
-  <input type="password" id="apiKey" placeholder="API 키(설정 시)" aria-label="API 키" style="width:110px">
-  <div class="sep"></div>
-  <button class="primary" id="btnLearn">정상 기준선 학습</button>
-  <button id="btnHist">저장 이력 불러오기</button>
-  <div class="sep"></div>
-  <span class="eyebrow">데모 결함 주입:</span>
-  <button class="fault" data-fault="unbalance">불평형</button>
-  <button class="fault" data-fault="misalign">정렬불량</button>
-  <button class="fault" data-fault="loose">이완</button>
-  <button class="fault" data-fault="hf">고주파</button>
-  <button class="fault" data-fault="drift">완만한 열화</button>
-  <button class="fault" data-fault="stop">설비 정지</button>
-  <button data-fault="none">정상 복귀</button>
-</div>
-
-<div class="grid">
-  <section>
-    <h2>지표별 이탈 정도 (z-score, 3σ 기준선)</h2>
-    <div id="meters"></div>
+  <section aria-labelledby="paths-title">
+    <div class="section-head"><div class="eyebrow">계산 경로</div><h2 id="paths-title">입력에서 각 경로의 결과까지</h2><p>센서 표본과 FG 회전 기준이 입력 품질 확인을 거쳐 특징 계산으로 이어집니다. 물리 근거와 학습 모델은 서로 다른 특징·점수를 만들며, CWRU 베어링 계산은 별도 경로로 연결됩니다.</p></div>
+    <div class="pathways">
+      <article class="card"><span class="tag">물리 근거</span><h3>ADXL345 3축 표본과 FG</h3><p>512점 창, 표본 시각, 회전 기준으로 입력 상태와 대역별 물리 근거를 계산합니다.</p><a href="https://github.com/melajin/edge_module/tree/v2-ratio-features/edge_module_c/report_physical">물리 근거 구현 경로 열기 →</a></article>
+      <article class="card"><span class="tag">101특징 모델</span><h3>선택 축의 파형과 모델 마진</h3><p>실시간 입력은 512점을 400점으로 변환해 101개 특징과 네 클래스 선형 마진 계산으로 연결합니다.</p><a href="https://github.com/melajin/edge_module/tree/v2-ratio-features/edge_module_c/report_ml">보고서 ML 구현 경로 열기 →</a><br><a href="https://github.com/melajin/edge_module/tree/v2-ratio-features/ml/report_model">모델 기준·출력 자료 열기 →</a></article>
+      <article class="card"><span class="tag">FG V3 보고서 코드</span><h3>회전 기준과 동기 투영</h3><p>펌웨어 JSON은 입력 이유와 표본율, FG 주파수, RPM, 1× 진폭, 비율 및 상태 이력을 기록합니다.</p><a href="https://github.com/melajin/edge_module/tree/v2-ratio-features/edge_module_c/esp32/edge_alimi_adxl345_fg_report">ADXL345·FG 보고서 코드 경로 열기 →</a></article>
+      <article class="card"><span class="tag">CWRU 베어링</span><h3>공개 파형의 별도 분석 경로</h3><p>12 kHz, 4096점 입력과 6개 특징을 사용하는 베어링 코드 및 검증 자료로 이동합니다.</p><a href="https://github.com/melajin/edge_module/tree/v2-ratio-features/edge_module_c/report_cwru">CWRU 구현 경로 열기 →</a></article>
+    </div>
   </section>
-  <section>
-    <h2>추세 — 최근 판정 이력</h2>
-    <canvas id="trend" width="640" height="260"></canvas>
-    <div class="legend" id="legend"></div>
+
+  <section aria-labelledby="contents-title">
+    <div class="section-head"><div class="eyebrow">보고서 순서</div><h2 id="contents-title">22쪽 보고서를 따라가는 8절</h2><p>각 링크는 보고서 절, 계산식, 단위, 현재 코드 위치와 확인 기록을 연결합니다.</p></div>
+    <nav class="chapters" aria-label="상세 해설 8절">
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/01-system.md"><span class="number">01</span><span><strong>전체 시스템</strong><small>진동·FG 입력에서 JSON 출력까지</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/02-physical-evidence.md"><span class="number">02</span><span><strong>물리 근거 경로</strong><small>FFT, 대역 에너지, 기준선과 후보 근거</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/03-ml-model.md"><span class="number">03</span><span><strong>학습 모델과 101특징</strong><small>특징 순서, 표준화, 네 클래스 마진</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/04-fault-interpretation.md"><span class="number">04</span><span><strong>결함별 물리 해석</strong><small>후보별 신호와 입력 조건</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/05-fg-hardware.md"><span class="number">05</span><span><strong>FG V3와 하드웨어</strong><small>회전 기준·동기 투영·인터페이스</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/06-results.md"><span class="number">06</span><span><strong>결과와 검증 범위</strong><small>평가 단위·분모·실행 기록</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/07-effects-and-limits.md"><span class="number">07</span><span><strong>기대효과와 운영 지표</strong><small>점검 흐름과 관찰 지표</small></span></a>
+      <a class="chapter" href="https://github.com/melajin/edge_module/blob/v2-ratio-features/docs/report-detail/08-sources.md"><span class="number">08</span><span><strong>출처와 코드 대응표</strong><small>보고서 인용·현재 경로·추가 자료</small></span></a>
+    </nav>
   </section>
-</div>
 
-<section>
-  <h2>이벤트 로그</h2>
-  <div id="log"></div>
-</section>
+  <section aria-labelledby="record-title">
+    <div class="section-head"><div class="eyebrow">현장 기록 파일</div><h2 id="record-title">FG JSONL 기록 읽기</h2><p>사용자가 고른 JSONL을 브라우저 안에서 읽고 원본 파일명과 행 번호를 함께 표시합니다. 수신된 imbalance 상태와 투표 수를 원본 그대로 확인할 수 있습니다.</p></div>
+    <div class="import-box">
+      <div class="file-row"><label for="recordFile"><strong>JSONL 파일 선택</strong></label><input id="recordFile" type="file" accept=".jsonl,application/x-ndjson,text/plain"><span class="mono">한 줄에 JSON 객체 1개</span></div>
+      <p class="import-status" id="importStatus" aria-live="polite">보고서 출력의 8개 필드 형식을 확인한 행이 여기에 표시됩니다.</p>
+      <div class="errors" id="importErrors" aria-live="polite"></div>
+      <div class="table-wrap" id="recordTableWrap"><div class="empty">JSONL 파일을 선택하면 파일명·행 번호와 기록 필드를 표시합니다.</div></div>
+    </div>
+  </section>
 
-<footer>
-엣지단(ESP32)은 판정만 하고, 이 콘솔은 어떤 지표가 · 얼마나 · 어떤 추세로 벗어났는지를 보여줍니다 — "이상!" 한 마디보다 해석 가능한 경보가 경보 피로를 줄입니다.
-고주파 지표는 보조용입니다(센서 대역 한계상 베어링 정밀 진단 아님).
-</footer>
+  <section aria-labelledby="archive-title">
+    <div class="card archive"><div><div class="eyebrow">버전 안내</div><h2 id="archive-title">저장소 V2 대시보드</h2><p>기존 3σ 학습·감시 시뮬레이터는 당시 화면과 기능을 보존한 별도 페이지에서 확인합니다.</p></div><a class="button" href="legacy-v2-dashboard.html">기존 V2 대시보드 사본 열기</a></div>
+  </section>
 
+  <footer><p>보고서 명목 조건, 코드 설정, 소프트웨어 검증, 보고서에 기록된 장치 관측값은 상세 해설의 근거 구분에 따라 읽습니다. 검증 출처와 조건은 상세 해설에 기록합니다.</p><p>프로젝트 소스 경로는 <a href="https://github.com/melajin/edge_module/tree/v2-ratio-features">v2-ratio-features 저장소 트리</a>에서 확인할 수 있습니다.</p></footer>
+</main>
 <script>
 "use strict";
-/* =====================================================================
-   특징 정의 — 펌웨어 EM_FEATURE_NAMES 와 키/순서 동일 (단일 진실 원칙)
-   ===================================================================== */
-const FEATURES = [
-  {key:"rms",              name:"RMS",  map:"전체 진동 에너지",        color:"#3A5A98"},
-  {key:"harmonic1_energy", name:"1×",   map:"불평형 (unbalance)",      color:"#1B7A55"},
-  {key:"harmonic2_energy", name:"2×",   map:"정렬불량 (misalignment)", color:"#B87A12"},
-  {key:"harmonic3_energy", name:"3×",   map:"이완 (looseness)",        color:"#8A4FA3"},
-  {key:"high_freq_energy", name:"HF",   map:"고주파 · 보조지표",       color:"#C23A20"},
-];
-const SIGMA = 3.0, Z_FULL = 5.0;   /* 미터 풀스케일 5σ, 레드라인 3σ */
-
-/* ---------- 데모 시뮬레이터 (펌웨어 판정 로직의 JS 미러) ---------- */
-const demo = {
-  ratedHz: 50.0,
-  base:  {rms:0.23, harmonic1_energy:0.14, harmonic2_energy:0.010, harmonic3_energy:0.004, high_freq_energy:0.002},
-  noise: {rms:0.006,harmonic1_energy:0.005,harmonic2_energy:0.0007,harmonic3_energy:0.0004,high_freq_energy:0.0002},
-  mult:  {rms:1, harmonic1_energy:1, harmonic2_energy:1, harmonic3_energy:1, high_freq_energy:1},
-  driftOn:false, stopped:false,
-  mode:0, learnN:0, learnTarget:40,
-  stats:null,            // {mean,std} — fit 결과
-  welford:null,
-  originalMeans:null,    // ★ 최초 fit 시 1회만 기록
-  flags:[], CONFIRM_W:5, CONFIRM_T:4,
-  driftBuf:[], DRIFT_W:30, DRIFT_SIGMA:2.0,
-
-  gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
-    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
-
-  sample(){
-    if(this.driftOn){FEATURES.forEach(f=>{if(f.key==="harmonic1_energy")this.mult[f.key]*=1.004;});}
-    const f={};
-    FEATURES.forEach(d=>{f[d.key]=Math.max(0,
-      this.base[d.key]*this.mult[d.key]+this.noise[d.key]*this.gauss());});
-    const rot=this.ratedHz+0.15*this.gauss();
-    return {f, rot};
-  },
-
-  startLearn(){
-    this.mode=1; this.learnN=0;
-    this.welford={n:0,mean:{},m2:{}};
-    FEATURES.forEach(d=>{this.welford.mean[d.key]=0;this.welford.m2[d.key]=0;});
-    this.flags=[]; this.driftBuf=[];
-  },
-
-  step(){
-    const {f,rot}=this.sample();
-    const out={mode:this.mode,learn:0,rot_hz:rot,f,run:1,sfault:0,
-               z:FEATURES.map(()=>0),n_dev:0,flag:0,anomaly:0,drift:0};
-    if(this.stopped){                 /* 정지: 판정·학습 중단 (펌웨어와 동일) */
-      out.run=0; out.rot_hz=0;
-      out.learn=this.mode===2?100:0;
-      this.flags=[];                  /* 재가동 시 낡은 플래그 오염 방지 */
-      return out;
-    }
-    if(this.mode===1){
-      const w=this.welford; w.n++;
-      FEATURES.forEach(d=>{const x=f[d.key],delta=x-w.mean[d.key];
-        w.mean[d.key]+=delta/w.n; w.m2[d.key]+=delta*(x-w.mean[d.key]);});
-      this.learnN++;
-      out.learn=Math.round(100*this.learnN/this.learnTarget);
-      if(this.learnN>=this.learnTarget){
-        this.stats={mean:{},std:{}};
-        FEATURES.forEach(d=>{this.stats.mean[d.key]=w.mean[d.key];
-          this.stats.std[d.key]=Math.max(1e-9,Math.sqrt(w.m2[d.key]/(w.n-1)));});
-        if(!this.originalMeans) this.originalMeans={...this.stats.mean}; /* 1회만 */
-        this.mode=2;
-      }
-    } else if(this.mode===2 && this.stats){
-      out.learn=100;
-      let nDev=0;
-      out.z=FEATURES.map(d=>{
-        const z=(f[d.key]-this.stats.mean[d.key])/this.stats.std[d.key];
-        if(Math.abs(z)>SIGMA)nDev++; return z;});
-      out.n_dev=nDev; out.flag=nDev>=1?1:0;
-      this.flags.push(out.flag); if(this.flags.length>this.CONFIRM_W)this.flags.shift();
-      out.anomaly=(this.flags.length>=this.CONFIRM_W &&
-        this.flags.reduce((a,b)=>a+b,0)>=this.CONFIRM_T)?1:0;
-      this.driftBuf.push({...f}); if(this.driftBuf.length>this.DRIFT_W)this.driftBuf.shift();
-      if(this.originalMeans && this.driftBuf.length>=this.DRIFT_W){
-        for(const d of FEATURES){
-          const roll=this.driftBuf.reduce((a,r)=>a+r[d.key],0)/this.driftBuf.length;
-          if(Math.abs(roll-this.originalMeans[d.key])/this.stats.std[d.key]>this.DRIFT_SIGMA){
-            out.drift=1;break;}
-        }
-      }
-    }
-    out.mode=this.mode;
-    return out;
+const REQUIRED = ["reason", "fs_hz", "fg_hz", "rpm", "amp_1x_g", "ratio_1x", "imbalance", "imbalance_votes"];
+const numericOrNull = value => value === null || (typeof value === "number" && Number.isFinite(value));
+function validateRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return ["JSON 객체가 필요합니다."];
+  const errors = [];
+  for (const key of REQUIRED) if (!Object.prototype.hasOwnProperty.call(value, key)) errors.push(`${key}: 필드가 없습니다.`);
+  if (typeof value.reason !== "string") errors.push("reason: 문자열이어야 합니다.");
+  for (const key of ["fs_hz", "fg_hz", "rpm", "ratio_1x"]) if (!numericOrNull(value[key])) errors.push(`${key}: 유한 숫자 또는 null이어야 합니다.`);
+  if (!(value.amp_1x_g === null || (Array.isArray(value.amp_1x_g) && value.amp_1x_g.length === 3 && value.amp_1x_g.every(item => typeof item === "number" && Number.isFinite(item))))) errors.push("amp_1x_g: 세 축의 유한 숫자 배열 또는 null이어야 합니다.");
+  if (typeof value.imbalance !== "string") errors.push("imbalance: 문자열이어야 합니다.");
+  if (!Number.isInteger(value.imbalance_votes)) errors.push("imbalance_votes: 정수여야 합니다.");
+  return errors;
+}
+function displayValue(value) { return value === null ? "null" : Array.isArray(value) ? `[${value.map(displayValue).join(", ")}]` : String(value); }
+function renderRecords(rows, filename) {
+  const wrap = document.getElementById("recordTableWrap");
+  wrap.replaceChildren();
+  if (!rows.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "형식 확인을 통과한 JSON 행이 없습니다."; wrap.append(empty); return; }
+  const table = document.createElement("table"); table.className = "record-table";
+  const thead = document.createElement("thead"), headRow = document.createElement("tr");
+  for (const label of ["자료 출처", ...REQUIRED, "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
+  thead.append(headRow); table.append(thead);
+  const tbody = document.createElement("tbody");
+  for (const row of rows) {
+    const tr = document.createElement("tr"), source = document.createElement("td");
+    source.className = "source"; source.textContent = `${filename}:${row.line}`; tr.append(source);
+    for (const key of REQUIRED) { const td = document.createElement("td"); td.textContent = displayValue(row.value[key]); tr.append(td); }
+    const raw = document.createElement("td"), details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre");
+    raw.className = "raw-record"; summary.textContent = "행 펼치기"; pre.textContent = JSON.stringify(row.value, null, 2); details.append(summary, pre); raw.append(details); tr.append(raw);
+    tbody.append(tr);
   }
-};
-
-/* ---------- UI 구축 ---------- */
-const metersEl=document.getElementById("meters");
-FEATURES.forEach((d,i)=>{
-  const div=document.createElement("div");div.className="meter";
-  div.innerHTML=`<div class="row1">
-      <span><span class="fname">${d.name}</span><span class="fmap">${d.map}</span></span>
-      <span class="zval" id="z${i}">z = --</span></div>
-    <div class="bar"><div class="fill" id="fill${i}"></div>
-      <div class="redline" style="left:${SIGMA/Z_FULL*100}%"></div></div>
-    <div class="bar-scale"><span>0</span><span>3σ</span><span>5σ</span></div>`;
-  metersEl.appendChild(div);
-});
-const legendEl=document.getElementById("legend");
-FEATURES.forEach(d=>{legendEl.innerHTML+=
-  `<span><span class="swatch" style="background:${d.color}"></span>${d.name} ${d.map}</span>`;});
-
-const hist=[]; const HIST_MAX=180;
-const canvas=document.getElementById("trend"),ctx=canvas.getContext("2d");
-
-function drawTrend(){
-  const W=canvas.width,H=canvas.height;
-  ctx.clearRect(0,0,W,H);
-  const pad={l:34,r:8,t:8,b:18},zTop=6;
-  const y=z=>pad.t+(H-pad.t-pad.b)*(1-Math.min(Math.max(z,-1),zTop)/ (zTop+1) - 0/(zTop+1));
-  const yz=z=>{const zc=Math.min(Math.max(z,-1),zTop);
-    return pad.t+(H-pad.t-pad.b)*(1-(zc+1)/(zTop+1));};
-  /* 격자: z=0, 3σ */
-  ctx.strokeStyle="#DDE0DB";ctx.lineWidth=1;ctx.setLineDash([]);
-  [[0,"0"],[3,"3σ"]].forEach(([z,lab])=>{
-    ctx.beginPath();ctx.moveTo(pad.l,yz(z));ctx.lineTo(W-pad.r,yz(z));
-    ctx.strokeStyle=z===3?"#C23A20":"#DDE0DB";ctx.stroke();
-    ctx.fillStyle="#6B7265";ctx.font="10px ui-monospace,monospace";
-    ctx.fillText(lab,4,yz(z)+3);});
-  if(hist.length<2)return;
-  const x=i=>pad.l+(W-pad.l-pad.r)*i/(HIST_MAX-1);
-  /* 이상 확정 구간 음영 */
-  ctx.fillStyle="rgba(198,58,32,.08)";
-  hist.forEach((h,i)=>{if(h.anomaly)ctx.fillRect(x(i),pad.t,
-    (W-pad.l-pad.r)/(HIST_MAX-1)+1,H-pad.t-pad.b);});
-  FEATURES.forEach((d,fi)=>{
-    ctx.beginPath();ctx.strokeStyle=d.color;ctx.lineWidth=1.5;
-    hist.forEach((h,i)=>{const yy=yz(h.z[fi]);
-      i?ctx.lineTo(x(i),yy):ctx.moveTo(x(i),yy);});
-    ctx.stroke();});
+  table.append(tbody); wrap.append(table);
 }
-
-const logEl=document.getElementById("log");
-function log(msg,cls="t-info"){
-  const t=new Date().toLocaleTimeString("ko-KR",{hour12:false});
-  logEl.innerHTML=`<div class="${cls}">${t}  ${msg}</div>`+logEl.innerHTML;
-  while(logEl.childElementCount>200)logEl.removeChild(logEl.lastChild);
-}
-
-/* ---------- 상태 렌더 ---------- */
-let prev={anomaly:0,drift:0,mode:-1,run:1,sfault:0};
-function render(o){
-  const modes=["IDLE","LEARNING","MONITORING"];
-  document.getElementById("modeTxt").textContent=modes[o.mode]||"?";
-  document.getElementById("rotHz").textContent=o.rot_hz.toFixed(1)+" Hz";
-  document.getElementById("rotRpm").textContent=Math.round(o.rot_hz*60);
-
-  const st=document.getElementById("statusText"),sub=document.getElementById("statusSub");
-  const la=document.getElementById("lampAlarm"),lw=document.getElementById("lampWarn"),
-        lo=document.getElementById("lampOk");
-  la.className="lamp";lw.className="lamp";lo.className="lamp";
-  if(o.mode===1){st.textContent=`기준선 학습 중 ${o.learn}%`;st.style.color="var(--muted)";
-    sub.textContent="이 설비의 정상 상태를 개별 학습하고 있습니다 (범용 배포의 핵심).";}
-  else if(o.mode!==2){st.textContent="대기";st.style.color="var(--muted)";
-    sub.textContent="학습을 시작하면 이 설비의 정상 기준선을 스스로 만듭니다.";}
-  else if(o.sfault){st.textContent="센서 점검";st.style.color="var(--warn)";
-    lw.classList.add("on-warn");
-    sub.textContent="센서 통신 장애 — 설비 이상이 아니라 배선/센서를 점검하세요.";}
-  else if(o.run===0){st.textContent="설비 정지";st.style.color="var(--muted)";
-    sub.textContent="회전 신호가 없습니다. 정지는 이상이 아니며, 재가동 시 감시가 자동 재개됩니다.";}
-  else if(o.anomaly){st.textContent="이상 확정";st.style.color="var(--alarm)";
-    la.classList.add("on-alarm");
-    const worst=o.z.map((z,i)=>({z:Math.abs(z),i})).sort((a,b)=>b.z-a.z)[0];
-    sub.textContent=`${FEATURES[worst.i].name} (${FEATURES[worst.i].map}) 지표가 ${o.z[worst.i].toFixed(1)}σ 이탈 — 점검 권장`;}
-  else if(o.drift){st.textContent="드리프트 주의";st.style.color="var(--warn)";
-    lw.classList.add("on-warn");
-    sub.textContent="급격한 이상은 아니지만 정상 기준선에서 완만하게 멀어지는 중입니다.";}
-  else{st.textContent="정상";st.style.color="var(--ok)";lo.classList.add("on-ok");
-    sub.textContent="모든 지표가 개별 학습된 정상 범위 내에 있습니다.";}
-
-  FEATURES.forEach((d,i)=>{
-    const z=o.z[i]??0,az=Math.abs(z);
-    document.getElementById("z"+i).textContent="z = "+z.toFixed(2);
-    const fill=document.getElementById("fill"+i);
-    fill.style.width=Math.min(az/Z_FULL,1)*100+"%";
-    fill.style.background=az>SIGMA?"var(--alarm)":az>SIGMA*0.7?"var(--warn)":"var(--ok)";
+document.getElementById("recordFile").addEventListener("change", async event => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const accepted = [], errors = [];
+  const lines = (await file.text()).split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (!line.trim()) return;
+    let value;
+    try { value = JSON.parse(line); }
+    catch (error) { errors.push(`${index + 1}행: JSON 구문 확인 — ${error.message}`); return; }
+    const problems = validateRecord(value);
+    if (problems.length) errors.push(`${index + 1}행: ${problems.join(" ")}`);
+    else accepted.push({line: index + 1, value});
   });
-
-  hist.push({z:o.z.slice(),anomaly:o.anomaly});
-  if(hist.length>HIST_MAX)hist.shift();
-  drawTrend();
-
-  if(o.anomaly&&!prev.anomaly)log("이상 확정 (confirm_window 충족)","t-alarm");
-  if(!o.anomaly&&prev.anomaly)log("이상 해제","t-ok");
-  if(o.drift&&!prev.drift)log("드리프트 주의 발생 — 완만한 열화 신호","t-warn");
-  if(o.mode===2&&prev.mode===1)log("기준선 학습 완료 → 감시 시작","t-ok");
-  if(o.run===0&&prev.run!==0)log("설비 정지 감지 — 판정 일시 중단 (오경보 아님)");
-  if(o.run===1&&prev.run===0)log("재가동 감지 — 감시 재개","t-ok");
-  if(o.sfault&&!prev.sfault)log("센서 통신 장애 — 배선 점검 필요","t-warn");
-  prev=o;
-}
-
-/* ---------- 소스 전환 / 루프 ---------- */
-let source="demo", liveFail=0;
-/* 장치(ESP32/Pi)가 이 페이지를 직접 서빙 중이면 같은 출처로 요청 —
- * CORS/mixed-content 문제가 원천적으로 없음 */
-function baseUrl(){
-  const u=document.getElementById("espUrl").value.trim();
-  return (location.protocol.startsWith("http") && u===location.origin) ? "" : u;
-}
-/* 펌웨어 API_KEY 설정 시 상태변경 요청에 붙일 키 (localStorage 유지) */
-const keyEl=document.getElementById("apiKey");
-try{keyEl.value=localStorage.getItem("em_api_key")||"";}catch(e){}
-keyEl.addEventListener("change",()=>{try{localStorage.setItem("em_api_key",keyEl.value);}catch(e){}});
-function keyQS(){const k=keyEl.value.trim();return k?"&key="+encodeURIComponent(k):"";}
-/* 페이지 로드 시: 장치에서 서빙됐는지 자동 감지 → 실장비 모드 자동 연결 */
-(async()=>{
-  if(!location.protocol.startsWith("http"))return;   /* file:// 은 데모 유지 */
-  try{
-    const r=await fetch("/data",{cache:"no-store"});
-    if(!r.ok)return;
-    const o=await r.json();
-    if(!("mode" in o))return;
-    document.querySelector('input[name=src][value=live]').checked=true;
-    source="live";
-    document.getElementById("espUrl").value=location.origin;
-    document.getElementById("srcTxt").textContent="실장비";
-    log("장치 직접 서빙 감지 — 실장비 모드로 자동 연결","t-ok");
-  }catch(e){/* 감지 실패 시 데모 유지 */}
-})();
-document.querySelectorAll('input[name=src]').forEach(r=>r.addEventListener("change",e=>{
-  source=e.target.value;
-  document.getElementById("srcTxt").textContent=source==="demo"?"데모":"실장비";
-  log(source==="demo"?"데모 시뮬레이터로 전환":"실장비(ESP32) 폴링으로 전환");
-}));
-
-document.getElementById("btnLearn").addEventListener("click",async()=>{
-  if(source==="demo"){demo.startLearn();log("기준선 학습 시작 (데모 40윈도)");}
-  else{
-    try{const r=await fetch(baseUrl()+"/learn?n=120"+keyQS(),{method:"POST"});
-      if(r.status===401){log("학습 명령 거부 — API 키 불일치","t-alarm");return;}
-      log("ESP32 에 학습 명령 전송 (120윈도, 약 2분)");}
-    catch(e){log("학습 명령 실패: "+e.message,"t-alarm");}
-  }
+  renderRecords(accepted, file.name);
+  document.getElementById("importStatus").textContent = `${file.name} · 전체 ${lines.filter(line => line.trim()).length}행 · 형식 확인 ${accepted.length}행 · 확인이 필요한 행 ${errors.length}행`;
+  document.getElementById("importErrors").textContent = errors.slice(0, 20).join("\n") + (errors.length > 20 ? `\n그 밖의 ${errors.length - 20}개 행도 형식을 확인하세요.` : "");
 });
-
-document.querySelectorAll("button[data-fault]").forEach(b=>b.addEventListener("click",()=>{
-  const k=b.dataset.fault;
-  demo.driftOn=false; demo.stopped=false;
-  demo.mult={rms:1,harmonic1_energy:1,harmonic2_energy:1,harmonic3_energy:1,high_freq_energy:1};
-  const label={unbalance:"불평형(1× 급증)",misalign:"정렬불량(2× 급증)",
-    loose:"이완(2×/3×/4× 동반 상승)",hf:"고주파 이상",drift:"완만한 열화 시작",
-    stop:"설비 정지 — 오경보 없이 '정지' 상태로 표시되어야 함",none:"정상 복귀"}[k];
-  if(k==="unbalance")demo.mult.harmonic1_energy=2.2;
-  if(k==="misalign") demo.mult.harmonic2_energy=3.5;
-  if(k==="loose"){demo.mult.harmonic2_energy=1.8;demo.mult.harmonic3_energy=3.0;}
-  if(k==="hf")demo.mult.high_freq_energy=4.0;
-  if(k==="drift")demo.driftOn=true;
-  if(k==="stop")demo.stopped=true;
-  log("데모 주입: "+label, k==="none"?"t-ok":"t-warn");
-}));
-
-document.getElementById("btnHist").addEventListener("click",async()=>{
-  try{
-    const r=await fetch(baseUrl()+"/history?n="+HIST_MAX,{cache:"no-store"});
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    const arr=await r.json();
-    hist.length=0;
-    arr.forEach(rec=>hist.push({z:rec.z||FEATURES.map(()=>0),anomaly:rec.anomaly||0}));
-    drawTrend();
-    log("저장 이력 "+arr.length+"건 복원 — Pi 도서관 계층","t-ok");
-  }catch(e){
-    log("이력 미제공 — ESP32 직결 상태. 이력은 Pi 서버(pi_server.py) 경유 시 제공","t-warn");
-  }
-});
-
-async function tick(){
-  if(source==="demo"){render(demo.step());}
-  else{
-    try{
-      const r=await fetch(baseUrl()+"/data",{cache:"no-store"});
-      const o=await r.json();
-      /* 펌웨어 JSON 스키마 → 렌더 형식 */
-      render({mode:o.mode,learn:o.learn,rot_hz:o.rot_hz||0,
-        z:o.z||FEATURES.map(()=>0),anomaly:o.anomaly||0,drift:o.drift||0,
-        run:("run" in o)?o.run:1,sfault:o.sfault||0});
-      liveFail=0;
-    }catch(e){
-      if(++liveFail===3)log("ESP32 연결 실패 — 주소/전원 확인","t-alarm");
-    }
-  }
-}
-setInterval(tick,600);
-log("콘솔 시작 — 데모 모드. [정상 기준선 학습] 을 눌러 시작하세요.");
-
-/* PWA: 홈 화면 설치 지원. 서비스 워커(오프라인 셸)는 보안 컨텍스트
- * (HTTPS/localhost)에서만 등록 가능 — 브라우저 정책. LAN http 에서는
- * 홈 화면 추가·전체화면 실행은 되고, 오프라인 캐시만 생략된다. */
-if("serviceWorker" in navigator &&
-   (location.protocol==="https:" || ["localhost","127.0.0.1"].includes(location.hostname))){
-  navigator.serviceWorker.register("/sw.js").catch(()=>{});
-}
 </script>
 </body>
 </html>

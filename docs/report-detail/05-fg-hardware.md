@@ -53,7 +53,7 @@ $$
 
 로 계산한다. 진폭 단위는 입력과 같은 g, 위상은 rad다. 허수 누적에 음의 부호를 쓰므로 `atan2`의 부호 관례가 코드와 일치한다. 이 정규화는 동기 투영 진폭이며 빈별 FFT 전력과 단위가 다르다.
 
-보고서 검증 사본은 1× 진폭·위상을 계산한다. `firmware_ml_evidence_live/src/v3_signal.c`의 최신 실험 경로는 2×·3× 성분과 에너지 비중을 추가한다.
+보고서 검증 사본은 1× 진폭·위상을 계산한다. `edge_module_c/report_ml/src/v3_signal.c`의 최신 실험 경로는 2×·3× 성분과 에너지 비중을 추가한다.
 
 ## 정상 기준과 후보 상태 갱신
 
@@ -83,7 +83,7 @@ PDF의 어댑터 구현은 ADXL345 주소 `0x53`, I²C 400 kHz, 400 Hz 데이터
 ## 근거 파일
 
 - 보고서: 최종보고서 12~15쪽, 19쪽 표 12.
-- FG V3 검증 사본: 현재 위치 `reports/algorithm-report-audit-2026-09-26/execution/firmware-build/v3_signal.c`, `em_v3.c`.
-- 최신 2X/3X 실험: 현재 위치 `firmware_ml_evidence_live/src/v3_signal.c`.
+- FG V3 검증 사본: 현재 위치 `edge_module_c/esp32/edge_alimi_adxl345_fg_report/source_snapshot/v3_signal.c`, `em_v3.c`.
+- 최신 2X/3X 실험: 현재 위치 `edge_module_c/report_ml/src/v3_signal.c`.
 - 입력 타이밍과 유효성 계산은 [물리 근거 경로](02-physical-evidence.md), 400점 ML 입력 보간은 [학습 모델](03-ml-model.md)을 참조한다.
 

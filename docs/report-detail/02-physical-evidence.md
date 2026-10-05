@@ -62,7 +62,7 @@ $$
 
 ## 현재 물리 근거 코어의 Hann·전력 정규화
 
-로컬 `fault_evidence_core/src/fault_evidence.c`는 보고서식 대역 계산을 확장한 별도 구현이다. $N=512$에서 **주기형 Hann**을 쓰고, $U=3/8$은 창 제곱의 평균 전력 보정량이다.
+로컬 `edge_module_c/report_physical/src/fault_evidence.c`는 보고서식 대역 계산을 확장한 별도 구현이다. $N=512$에서 **주기형 Hann**을 쓰고, $U=3/8$은 창 제곱의 평균 전력 보정량이다.
 
 $$
 w[n]=\frac12\left(1-\cos\frac{2\pi n}{N}\right),\qquad U=\frac38.
@@ -196,15 +196,15 @@ $$
 | 구현 | 전처리·특징 | 정상 통계와 판정 | 문서 연결 |
 |---|---|---|---|
 | `edge_module/edge_module_c/core/`의 기존 V2 | 평균 제거→$(N-1)$ 대칭 Hann→진폭 스펙트럼; RMS, H1/H2/H3 비율, HF 비율 | 특징을 $\ln(x+10^{-6})$로 변환해 평균과 표본 표준편차 저장. 기본 $|z|>3$, 특징 수 조건, 기본 4/5 확인. | PDF [9]의 코드 경로. [`em_detector.c`](../../edge_module_c/core/em_detector.c), [`em_fft.c`](../../edge_module_c/core/em_fft.c) |
-| 보고서 수식/`fault_evidence_core` | 512점 3축 합산 주기형 Hann 전력, 7개 비중복 대역·형상 특징 | 로그 중앙값/MAD, 내부 z→d, 후보 근거 강도·EWMA | 현재 위치: `fault_evidence_core/src/fault_evidence.c` |
-| 보고서 FG V3 검증 사본 | FG 동기 사인·코사인 투영으로 1× 진폭·위상 | 최근 다섯 유효창의 위상 집중도와 4/5 상태정책 | `reports/algorithm-report-audit-2026-09-26/execution/firmware-build/` (현재 저장소 바깥) |
-| 최신 확장 실험 | 최신 `firmware_ml_evidence_live/src/v3_signal.c`는 1× 외 2×/3× 진폭과 비율을 계산 | 물리 근거와 ML 계층을 연결한 별도 실험 경로 | 현재 위치: `firmware_ml_evidence_live/` |
+| 보고서 수식/`fault_evidence_core` | 512점 3축 합산 주기형 Hann 전력, 7개 비중복 대역·형상 특징 | 로그 중앙값/MAD, 내부 z→d, 후보 근거 강도·EWMA | 현재 위치: `edge_module_c/report_physical/src/fault_evidence.c` |
+| 보고서 FG V3 검증 사본 | FG 동기 사인·코사인 투영으로 1× 진폭·위상 | 최근 다섯 유효창의 위상 집중도와 4/5 상태정책 | `edge_module_c/esp32/edge_alimi_adxl345_fg_report/source_snapshot/` (현재 저장소 바깥) |
+| 최신 확장 실험 | 최신 `edge_module_c/report_ml/src/v3_signal.c`는 1× 외 2×/3× 진폭과 비율을 계산 | 물리 근거와 ML 계층을 연결한 별도 실험 경로 | 현재 위치: `edge_module_c/report_ml/` |
 
 현재 저장소 C V2 기본값은 $N=1024$, $f_s=1000\,\mathrm{Hz}$이고, Python V2 설명은 MPU-6050·1 kHz를 사용한다. PDF 표 4는 512표본·400 Hz 조건을 제시한다. 이 세 구현 조건을 버전별 설정으로 정리한다.
 
 ## 근거 파일과 확인 범위
 
 - 저장소 내 기존 구현: [`em_fft.c`](../../edge_module_c/core/em_fft.c), [`em_features.c`](../../edge_module_c/core/em_features.c), [`em_detector.c`](../../edge_module_c/core/em_detector.c), [`em_config.h`](../../edge_module_c/core/em_config.h), [`feature_extraction_v2.py`](../../src/feature_extraction_v2.py).
-- 보고서 robust baseline 계산: 현재 위치 `fault_evidence_core/src/fault_evidence.c`의 `fec_extract()`, `fec_baseline_finish()`, `fec_evaluate()`; 개요: `fault_evidence_core/README.md`.
-- FG V3: 현재 위치 `reports/algorithm-report-audit-2026-09-26/execution/firmware-build/v3_signal.c`의 `v3_analyze_1x()`와 `em_v3.c`의 `em_v3_update()`.
+- 보고서 robust baseline 계산: 현재 위치 `edge_module_c/report_physical/src/fault_evidence.c`의 `fec_extract()`, `fec_baseline_finish()`, `fec_evaluate()`; 개요: `edge_module_c/report_physical/README.md`.
+- FG V3: 현재 위치 `edge_module_c/esp32/edge_alimi_adxl345_fg_report/source_snapshot/v3_signal.c`의 `v3_analyze_1x()`와 `em_v3.c`의 `em_v3_update()`.
 - 실행 기록에는 Python/C 정책 비교 219회, 합성 C 신호 검사, ESP32 컴파일 결과가 있다. 이 기록은 소프트웨어 비교·합성 입력·빌드의 세 유형으로 구분된다.

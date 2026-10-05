@@ -1,0 +1,7 @@
+# Preserve the exact bytes used by report source and provenance hashes.
+edge_module_c/esp32/edge_alimi_adxl345_fg_report/** -text whitespace=cr-at-eol,-blank-at-eof
+edge_module_c/report_cwru/** -text whitespace=cr-at-eol,-blank-at-eof
+edge_module_c/report_ml/** -text whitespace=cr-at-eol,-blank-at-eof
+edge_module_c/report_physical/** -text whitespace=cr-at-eol,-blank-at-eof
+ml/report_model/** -text whitespace=cr-at-eol,-blank-at-eof
+src/report_reference/** -text whitespace=cr-at-eol,-blank-at-eof

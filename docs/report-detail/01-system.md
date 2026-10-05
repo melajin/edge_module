@@ -72,7 +72,7 @@ $$
 | 구현 | 현재 위치 | 연결 함수·근거 |
 |---|---|---|
 | FFT V2 | `edge_module_c/core/` | `em_fft.c`, `em_features.c`, `em_detector.c`, `em_pipeline.c` |
-| FG V3 검증 사본 | `reports/algorithm-report-audit-2026-09-26/execution/firmware-build/` | `v3_signal.c`, `em_v3.c`, 어댑터의 `print_result()` |
-| 물리 근거 코어 | `fault_evidence_core/` | `fec_extract()`, `fec_baseline_finish()`, `fec_evaluate()` |
-| 101특징 어댑터 | `firmware_ml_evidence_live/` | `ml_reference_extract()`, `ml_reference_predict()`, `ml_live.c` |
-| CWRU 경로 | `firmware_cwru_integration/` | `em_cwru_features()`, `em_cwru_predict()`, `em_cwru_vote_update()` |
+| FG V3 검증 사본 | `edge_module_c/esp32/edge_alimi_adxl345_fg_report/source_snapshot/` | `v3_signal.c`, `em_v3.c`, 어댑터의 `print_result()` |
+| 물리 근거 코어 | `edge_module_c/report_physical/` | `fec_extract()`, `fec_baseline_finish()`, `fec_evaluate()` |
+| 101특징 어댑터 | `edge_module_c/report_ml/` | `ml_reference_extract()`, `ml_reference_predict()`, `ml_live.c` |
+| CWRU 경로 | `edge_module_c/report_cwru/` | `em_cwru_features()`, `em_cwru_predict()`, `em_cwru_vote_update()` |

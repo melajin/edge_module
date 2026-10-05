@@ -1,0 +1,25 @@
+{
+  "model_id": "limited400_ch2_extended_linear_c1_cv5_mean_margin_20261002",
+  "profile": "limited400",
+  "input": "single_ch2",
+  "family": "extended",
+  "features": 101,
+  "dataset": "UPATRAS Mechanical faults, Mendeley Data Version 3",
+  "dataset_url": "https://data.mendeley.com/datasets/zx8pfhdtnb/3",
+  "raw_input_location_from_checkout_parent": "output/fault_type_90_mechanical_A_20261002/",
+  "raw_input_files": "Selected records under sources/trial_XX, described by source_manifest.json; supply this directory to tools/verify_ml.py --full-parity --source-dir.",
+  "fold_model_location_from_checkout_parent": "output/fault_type_90_mechanical_group_20261002/candidates/limited400__single_ch2__extended__linear_c1/",
+  "fold_model_files_bundled": false,
+  "fold_sha256": {
+    "fold0.joblib": "43d7aba8ee381fd15ff3eeb49bf1e5672cebb2b527c53bf7e1699fe76c35a9f2",
+    "fold1.joblib": "de9dbf8e7455ee9a6ba72122c1075f44bdb30d39ef3cb0ae011a77d309a8a78b",
+    "fold2.joblib": "8812106295262da186ce44954a9d05e1886aa350e5d88e932369ea261e202b6d",
+    "fold3.joblib": "0864296fb12b052ecc1f4a3be5cf3bbc6ff81418a00d4200e2040b2ecc5a52aa",
+    "fold4.joblib": "966c40d5328a89ae5ac57002a6b31111d2a46932f30f472acbfbbc29c7654cef"
+  },
+  "feature_contract_sha256": "ab3da2252d64d0a8a98b091cf0915da6c98067ae1232722cc764b0b00ddee771",
+  "fit_provenance_sha256": "a7cc7962cc725ad94173519085cc3d2ee357369b3503ddc6360fc62aff40f7e3",
+  "generated_c_headers_checked_in": true,
+  "generated_header_smoke_requires_external_inputs": false,
+  "training_source": "ml/report_model/a_features.py and a_group_develop.py; developer input/output paths are selectable with --source/--output."
+}

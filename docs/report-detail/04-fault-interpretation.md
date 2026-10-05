@@ -63,7 +63,7 @@ $\rho$는 FG 기준 회전 위상의 집중도를 0~1로 나타낸다. 1× 진�
 ## 근거 파일
 
 - 보고서 해석: 최종보고서 11쪽 표 8.
-- 회전 차수 대역·필수 입력·후보 강도식: 현재 위치 `fault_evidence_core/src/fault_evidence.c`의 `fec_evaluate()`와 `fault_evidence_core/README.md`.
-- 보고서 FG V3 1× 해석: 현재 위치 `reports/algorithm-report-audit-2026-09-26/execution/firmware-build/v3_signal.c` 및 `em_v3.c`.
-- 2X/3X 동기 투영의 현재 위치: `firmware_ml_evidence_live/src/v3_signal.c`.
+- 회전 차수 대역·필수 입력·후보 강도식: 현재 위치 `edge_module_c/report_physical/src/fault_evidence.c`의 `fec_evaluate()`와 `edge_module_c/report_physical/README.md`.
+- 보고서 FG V3 1× 해석: 현재 위치 `edge_module_c/esp32/edge_alimi_adxl345_fg_report/source_snapshot/v3_signal.c` 및 `em_v3.c`.
+- 2X/3X 동기 투영의 현재 위치: `edge_module_c/report_ml/src/v3_signal.c`.
 - ML 개발 데이터 라벨·성적 범위는 [101특징 모델](03-ml-model.md)과 [결과 표](06-results.md)를 참조한다.
