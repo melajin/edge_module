@@ -5,6 +5,9 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Preferences.h>
+#include <esp_timer.h>
+#include <esp_system.h>
+#include "acquisition_quality.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +20,8 @@ extern "C" {
 static const int SDA_PIN = 21, SCL_PIN = 22, FG_PIN = 25;
 static const uint8_t ADXL_ADDR = 0x53; /* ALT ADDRESS low: verify actual board. */
 static const uint32_t SERIAL_BAUD = 115200;
+static const size_t SERIAL_TX_BUFFER_BYTES = 2048;
+static bool serial_ready = false;
 static const unsigned LEARN_WINDOWS = 336;
 static const float MIN_BASELINE_G = 0.001f;
 static const float MAX_BASELINE_G = 4.0f;
@@ -67,6 +72,10 @@ static bool have_last_fg = false;
 static v3_fg_edge_t last_fg_edge;
 static float last_fg_period_us = 0.0f;
 static bool interwindow_overrun = false;
+// Observation bookkeeping deliberately survives reset_temporal().
+static AcquisitionHistory acquisition_history;
+static AcquisitionQuality acquisition;
+static char acquisition_session[17];
 static char command_line[32];
 static unsigned command_length = 0;
 static const char *profile_state = "unregistered";
@@ -299,7 +308,7 @@ static bool adxl_begin()
     return true;
 }
 
-static bool adxl_next_sample(v3_sample_t *sample, const char **reason)
+static bool adxl_next_sample(v3_sample_t *sample, uint64_t *read_start_us, const char **reason)
 {
     const uint32_t wait_start = micros();
     uint8_t source = 0;
@@ -321,6 +330,7 @@ static bool adxl_next_sample(v3_sample_t *sample, const char **reason)
     }
     sample->time_us = micros();
     uint8_t raw[6];
+    *read_start_us = (uint64_t)esp_timer_get_time();
     if (!adxl_read(REG_DATAX0, raw, sizeof(raw))) {
         *reason = "adxl_i2c";
         return false;
@@ -454,6 +464,18 @@ static void print_result(const char *reason, unsigned captured, unsigned fg_edge
     Serial.print(",\"phase_concentration\":");
     if (evidence_valid) Serial.printf("%.5f", phase_concentration);
     else Serial.print("null");
+    Serial.printf(",\"acquisition\":{\"v\":1,\"session\":\"%s\",\"seq\":%llu,\"start_us\":",
+                  acquisition_session, (unsigned long long)acquisition.seq);
+    if (acquisition.count) Serial.printf("%llu", (unsigned long long)acquisition.start_us);
+    else Serial.print("null");
+    Serial.print(",\"end_us\":");
+    if (acquisition.count) Serial.printf("%llu", (unsigned long long)acquisition.end_us);
+    else Serial.print("null");
+    Serial.print(",\"gap_us\":");
+    if (acquisition.have_gap) Serial.printf("%llu", (unsigned long long)acquisition.gap_us);
+    else Serial.print("null");
+    Serial.printf(",\"valid\":%s,\"reason\":\"%s\"}",
+                  acquisition.valid ? "true" : "false", acquisition.reason);
     Serial.printf(",\"bearing\":\"%s\",\"misalignment\":\"%s\","
                   "\"belt\":\"%s\",\"imbalance\":\"%s\","
                   "\"imbalance_votes\":%u,\"auto_confirm\":false}\n",
@@ -555,7 +577,18 @@ static void read_commands()
 
 void setup()
 {
+    // Queue a complete result without spending its whole wire time between
+    // windows. Allocation/driver failure must not silently start acquisition.
+    const bool tx_configured = Serial.setTxBufferSize(SERIAL_TX_BUFFER_BYTES) == SERIAL_TX_BUFFER_BYTES;
     Serial.begin(SERIAL_BAUD);
+    serial_ready = tx_configured && (bool)Serial;
+    if (!serial_ready) {
+        paused = true;
+        if (Serial) Serial.println("{\"boot\":\"adxl345_v3\",\"error\":\"serial_tx_unavailable\"}");
+        return;
+    }
+    snprintf(acquisition_session, sizeof(acquisition_session), "%08lx%08lx",
+             (unsigned long)esp_random(), (unsigned long)esp_random());
     Wire.begin(SDA_PIN, SCL_PIN);
     Wire.setClock(400000);
     Wire.setTimeOut(5);
@@ -574,17 +607,22 @@ void setup()
 
 void loop()
 {
+    if (!serial_ready) { delay(1000); return; }
     read_commands();
     if (paused) {
         delay(20);
         return;
     }
+    acquisition = AcquisitionQuality{};
     if (!sensor_ready) {
         abort_learning();
         reset_temporal();
         sensor_ready = adxl_begin();
         if (!sensor_ready) {
-            Serial.println("{\"reason\":\"adxl_init\",\"imbalance\":\"unavailable\"}");
+            interwindow_overrun = false;
+            acquisition_finish(acquisition_history, acquisition);
+            v3_signal_result_t unavailable = {};
+            print_result("adxl_init", 0, 0, &unavailable, false, 0, 0, -1);
             delay(1000);
             return;
         }
@@ -596,6 +634,7 @@ void loop()
         abort_learning();
         reset_temporal();
         v3_signal_result_t unavailable = {};
+        acquisition_finish(acquisition_history, acquisition);
         print_result("adxl_i2c", 0, 0, &unavailable, false, 0, 0, -1);
         return;
     }
@@ -604,11 +643,14 @@ void loop()
     const uint64_t fg_count_at_start = fg_count;
     portEXIT_CRITICAL(&fg_mux);
     for (; captured < V3_SAMPLE_COUNT; ++captured) {
-        if (!adxl_next_sample(&samples[captured], &reason)) {
+        uint64_t read_start_us = 0;
+        if (!adxl_next_sample(&samples[captured], &read_start_us, &reason)) {
             sensor_ready = false;
             break;
         }
+        acquisition_record(acquisition, read_start_us, samples[captured]);
     }
+    acquisition_finish(acquisition_history, acquisition);
     v3_signal_result_t signal = {};
     if (captured != V3_SAMPLE_COUNT) {
         abort_learning();

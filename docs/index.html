@@ -16,6 +16,7 @@
     .chapter{display:flex;gap:14px;align-items:flex-start;padding:16px;border:1px solid var(--line);border-radius:9px;background:var(--card);text-decoration:none}.chapter:hover{border-color:#8ebda7}.number{flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--green-soft);color:var(--green);font:700 .88rem var(--mono)}.chapter strong{display:block;color:var(--ink)}.chapter small{display:block;margin-top:2px;color:var(--muted);font-size:.84rem}
     .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:9px;background:var(--card)}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#eef2ed;color:var(--muted);font-size:.8rem;font-weight:750}tr:last-child td{border-bottom:0}code,.mono{font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere}.note{padding:15px 17px;border-left:3px solid var(--green);background:var(--green-soft);border-radius:0 8px 8px 0;color:#36564a}
     .import-box{padding:20px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.file-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.file-row input{max-width:100%;font:inherit}.import-status{margin:13px 0 8px;color:var(--muted);font-size:.9rem}.errors{margin:0 0 12px;color:var(--red);font-size:.9rem}.record-table{min-width:900px;font-size:.88rem}.record-table td{font-family:var(--mono);font-size:.82rem}.record-table td.source{font-family:inherit;white-space:nowrap}.raw-record{max-width:380px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem}.empty{padding:22px;color:var(--muted);text-align:center}.archive{display:flex;flex-wrap:wrap;gap:15px;align-items:center;justify-content:space-between}
+    .record-table tr>:nth-child(n+2):nth-child(-n+5){word-break:keep-all}.record-table tr>:nth-child(2){min-width:240px}.record-table tr>:nth-child(3){min-width:200px}.record-table tr>:nth-child(4){min-width:320px}.record-table tr>:nth-child(5){min-width:200px}
     footer{padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}.source-link{font-family:var(--mono);font-size:.84rem}
     @media(max-width:760px){main{width:min(100% - 26px,1080px);padding-top:36px}.specs{grid-template-columns:repeat(2,1fr)}.pathways,.chapters{grid-template-columns:1fr}.archive{align-items:flex-start}}
     @media(max-width:420px){.specs{grid-template-columns:1fr 1fr;gap:7px}.spec{padding:12px}.spec strong{font-size:.9rem}th,td{padding:10px}}
@@ -70,6 +71,7 @@
       <div class="file-row"><label for="recordFile"><strong>JSONL 파일 선택</strong></label><input id="recordFile" type="file" accept=".jsonl,application/x-ndjson,text/plain"><span class="mono">한 줄에 JSON 객체 1개</span></div>
       <p class="import-status" id="importStatus" aria-live="polite">보고서 출력의 8개 필드 형식을 확인한 행이 여기에 표시됩니다.</p>
       <div class="errors" id="importErrors" aria-live="polite"></div>
+      <p class="import-status">수신 순번은 전송 CRC 검증이 아닙니다. 시각은 센서 변환 시각이 아닌 MCU 읽기 시작이며, 창간 경계에는 표본 간격도 포함됩니다. 구형 기록의 품질·공백은 미확인으로 표시합니다.</p>
       <div class="table-wrap" id="recordTableWrap"><div class="empty">JSONL 파일을 선택하면 파일명·행 번호와 기록 필드를 표시합니다.</div></div>
     </div>
   </section>
@@ -93,7 +95,87 @@ function validateRecord(value) {
   if (!(value.amp_1x_g === null || (Array.isArray(value.amp_1x_g) && value.amp_1x_g.length === 3 && value.amp_1x_g.every(item => typeof item === "number" && Number.isFinite(item))))) errors.push("amp_1x_g: 세 축의 유한 숫자 배열 또는 null이어야 합니다.");
   if (typeof value.imbalance !== "string") errors.push("imbalance: 문자열이어야 합니다.");
   if (!Number.isInteger(value.imbalance_votes)) errors.push("imbalance_votes: 정수여야 합니다.");
+  return errors.concat(validateAcquisition(value));
+}
+function validateAcquisition(record) {
+  if (!Object.prototype.hasOwnProperty.call(record, "acquisition")) return [];
+  const a = record.acquisition, errors = [];
+  if (!a || typeof a !== "object" || Array.isArray(a)) return ["acquisition: 객체가 필요합니다."];
+  const counter = n => Number.isSafeInteger(n) && n >= 0;
+  for (const key of ["v", "session", "seq", "start_us", "end_us", "gap_us", "valid", "reason"])
+    if (!Object.prototype.hasOwnProperty.call(a, key)) errors.push(`acquisition.${key}: 필드가 없습니다.`);
+  if (a.v !== 1) errors.push("acquisition.v: 버전 1이 필요합니다.");
+  if (typeof a.session !== "string" || !/^[0-9a-fA-F]{16}$/.test(a.session)) errors.push("acquisition.session: 16자리 16진수가 필요합니다.");
+  if (!counter(a.seq)) errors.push("acquisition.seq: 음수가 아닌 안전한 정수가 필요합니다.");
+  for (const key of ["start_us", "end_us", "gap_us"])
+    if (a[key] !== null && !counter(a[key])) errors.push(`acquisition.${key}: 정수 또는 null이 필요합니다.`);
+  if (typeof a.valid !== "boolean") errors.push("acquisition.valid: boolean이 필요합니다.");
+  if (!["ok", "no_samples", "partial_window", "sample_time", "sample_rate", "sensor_range", "numeric_input"].includes(a.reason)) errors.push("acquisition.reason: 지원하지 않는 사유입니다.");
+  const count = record.samples;
+  if (!counter(count) || count > 512) errors.push("samples: 0~512 정수가 필요합니다.");
+  if (errors.length) return errors;
+  const start = a.start_us, end = a.end_us, gap = a.gap_us;
+  if (count === 0) {
+    if ([start, end, gap].some(x => x !== null) || a.reason !== "no_samples" || a.valid) errors.push("acquisition: 0표본은 null 시각과 invalid/no_samples여야 합니다.");
+  } else if (start === null || end === null || end < start || (count > 1 && end === start)) errors.push("acquisition: 표본 시각이 누락되었거나 역행합니다.");
+  else if (count === 1 && end !== start) errors.push("acquisition: 1표본의 시작/종료 시각은 같아야 합니다.");
+  if (count > 0 && count < 512 && (a.valid || a.reason !== "partial_window")) errors.push("acquisition: 부분창은 invalid/partial_window여야 합니다.");
+  if (count === 512 && ["no_samples", "partial_window"].includes(a.reason)) errors.push("acquisition: 표본 수와 사유가 다릅니다.");
+  if (a.valid !== (a.reason === "ok")) errors.push("acquisition: valid와 reason이 다릅니다.");
+  if (a.valid && start !== null && end !== null && end > start) {
+    const rate = 511000000 / (end - start);
+    if (rate < 380 || rate > 420) errors.push("acquisition: 유효창의 표본율이 380~420 Hz를 벗어납니다.");
+  }
+  if (a.seq === 0 && gap !== null) errors.push("acquisition: 첫 취득시도에는 이전 공백이 없습니다.");
+  if (start !== null && gap !== null && gap > start) errors.push("acquisition: 공백이 부팅 시각을 초과합니다.");
   return errors;
+}
+class SequenceTracker {
+  constructor() { this.reset(); }
+  reset() { this.session = null; this.seq = null; }
+  observe(record) {
+    const a = record.acquisition;
+    let status = "unknown", missing = null;
+    if (!a) this.reset();
+    else {
+      const session = a.session.toLowerCase(), seq = a.seq;
+      if (this.session === null) status = "first";
+      else if (session !== this.session) status = "session_changed";
+      else if (seq === this.seq) { status = "duplicate"; missing = 0; }
+      else if (seq < this.seq) status = "out_of_order";
+      else { missing = seq - this.seq - 1; status = missing ? "gap" : "contiguous"; }
+      if (!["duplicate", "out_of_order"].includes(status)) { this.session = session; this.seq = seq; }
+    }
+    return {status, missing};
+  }
+}
+function parseRecords(text) {
+  const accepted = [], errors = [], tracker = new SequenceTracker();
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (!line.trim()) return;
+    let value;
+    try { value = JSON.parse(line); }
+    catch (error) { tracker.reset(); errors.push(`${index + 1}행: JSON 구문 확인 — ${error.message}`); return; }
+    const problems = validateRecord(value);
+    if (problems.length) { tracker.reset(); errors.push(`${index + 1}행: ${problems.join(" ")}`); }
+    else accepted.push({line: index + 1, value, transport: tracker.observe(value)});
+  });
+  return {accepted, errors, count: lines.filter(line => line.trim()).length};
+}
+function qualityCells(row) {
+  const a = row.value.acquisition;
+  const labels = {unknown: "미확인", first: "첫 수신 · 이전 미확인", contiguous: "순번 연결",
+    gap: "순번 누락", duplicate: "중복", out_of_order: "역행", session_changed: "세션 변경"};
+  const t = row.transport;
+  const transport = labels[t.status] + (t.status === "gap" ? ` ${t.missing}개` : "") +
+    (a ? ` · ${a.session} / ${a.seq}` : "");
+  if (!a) return [transport, "미확인", "미확인", "미확인"];
+  const quality = `${a.valid ? "유효" : "무효"} · ${a.reason} · ${row.value.samples}표본`;
+  const range = a.start_us === null ? "관측 표본 없음" :
+    `${a.start_us} → ${a.end_us} µs (범위 ${(a.end_us - a.start_us) / 1000} ms)`;
+  const gap = a.gap_us === null ? "미확인" : `${a.gap_us / 1000} ms · 상태 미관측`;
+  return [transport, quality, range, gap];
 }
 function displayValue(value) { return value === null ? "null" : Array.isArray(value) ? `[${value.map(displayValue).join(", ")}]` : String(value); }
 function renderRecords(rows, filename) {
@@ -102,12 +184,13 @@ function renderRecords(rows, filename) {
   if (!rows.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "형식 확인을 통과한 JSON 행이 없습니다."; wrap.append(empty); return; }
   const table = document.createElement("table"); table.className = "record-table";
   const thead = document.createElement("thead"), headRow = document.createElement("tr");
-  for (const label of ["자료 출처", ...REQUIRED, "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
+  for (const label of ["자료 출처", "수신 순번 (파일 내 계산)", "센서 창 품질", "읽기 시작 시각 · 부팅 기준", "창간 미관측 경계", ...REQUIRED, "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
   thead.append(headRow); table.append(thead);
   const tbody = document.createElement("tbody");
   for (const row of rows) {
     const tr = document.createElement("tr"), source = document.createElement("td");
     source.className = "source"; source.textContent = `${filename}:${row.line}`; tr.append(source);
+    for (const value of qualityCells(row)) { const td = document.createElement("td"); td.textContent = value; tr.append(td); }
     for (const key of REQUIRED) { const td = document.createElement("td"); td.textContent = displayValue(row.value[key]); tr.append(td); }
     const raw = document.createElement("td"), details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre");
     raw.className = "raw-record"; summary.textContent = "행 펼치기"; pre.textContent = JSON.stringify(row.value, null, 2); details.append(summary, pre); raw.append(details); tr.append(raw);
@@ -118,19 +201,9 @@ function renderRecords(rows, filename) {
 document.getElementById("recordFile").addEventListener("change", async event => {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
-  const accepted = [], errors = [];
-  const lines = (await file.text()).split(/\r?\n/);
-  lines.forEach((line, index) => {
-    if (!line.trim()) return;
-    let value;
-    try { value = JSON.parse(line); }
-    catch (error) { errors.push(`${index + 1}행: JSON 구문 확인 — ${error.message}`); return; }
-    const problems = validateRecord(value);
-    if (problems.length) errors.push(`${index + 1}행: ${problems.join(" ")}`);
-    else accepted.push({line: index + 1, value});
-  });
+  const {accepted, errors, count} = parseRecords(await file.text());
   renderRecords(accepted, file.name);
-  document.getElementById("importStatus").textContent = `${file.name} · 전체 ${lines.filter(line => line.trim()).length}행 · 형식 확인 ${accepted.length}행 · 확인이 필요한 행 ${errors.length}행`;
+  document.getElementById("importStatus").textContent = `${file.name} · 전체 ${count}행 · 형식 확인 ${accepted.length}행 · 확인이 필요한 행 ${errors.length}행`;
   document.getElementById("importErrors").textContent = errors.slice(0, 20).join("\n") + (errors.length > 20 ? `\n그 밖의 ${errors.length - 20}개 행도 형식을 확인하세요.` : "");
 });
 </script>

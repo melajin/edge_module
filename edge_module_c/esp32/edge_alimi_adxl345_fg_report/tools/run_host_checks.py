@@ -4,6 +4,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tempfile
+import json
 from pathlib import Path
 
 
@@ -23,6 +24,30 @@ def main() -> int:
             "-Isrc", "src/v3_signal.c", "tests/test_signal.c", "-lm", "-o", str(executable),
         ])
         run([str(executable)])
+        acquisition_executable = Path(temp) / "test_acquisition.exe"
+        run([
+            "g++", "-std=c++11", "-Wall", "-Wextra", "-Werror", "-pedantic",
+            "-Itests/stubs", "-Isrc", "src/acquisition_quality.cpp",
+            "src/v3_signal.c", "src/em_v3.c", "tests/test_acquisition.cpp",
+            "-o", str(acquisition_executable),
+        ])
+        output = subprocess.check_output([str(acquisition_executable)], cwd=PROJECT, text=True)
+        rows = [json.loads(line) for line in output.splitlines()]
+        assert len(rows) == 6
+        assert [r["acquisition"]["seq"] for r in rows[:5]] == list(range(5))
+        assert rows[0]["acquisition"]["valid"] and rows[0]["fs_hz"] is None
+        assert rows[0]["acquisition"]["gap_us"] is None
+        assert rows[1]["acquisition"]["gap_us"] > 2**32
+        assert rows[2]["acquisition"]["reason"] == "partial_window"
+        assert rows[3]["reason"] == "adxl_init"
+        assert rows[3]["acquisition"]["start_us"] is None
+        assert rows[3]["acquisition"]["end_us"] is None
+        assert rows[3]["acquisition"]["gap_us"] is None
+        assert rows[4]["acquisition"]["valid"]
+        longest = max(len(line.encode()) + 1 for line in output.splitlines())
+        assert longest * 10 / 115200 < 0.100, "JSON alone exhausts the 100 ms gap budget"
+        print(f"Acquisition and main.cpp JSON checks passed; conservative frame {longest} bytes, "
+              f"115200 8N1 wire time {longest * 10 / 115200 * 1000:.2f} ms")
         run([sys.executable, str(PROJECT / "tests" / "test_v3_policy_parity.py")])
     return 0
 
