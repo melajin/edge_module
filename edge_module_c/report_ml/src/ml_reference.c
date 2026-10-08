@@ -11,7 +11,15 @@ const char *const ml_reference_classes[4] = {"imbalance","mechanical_looseness",
 /* Caller serializes access: fixed workspace avoids ESP32 task stack exhaustion. */
 typedef struct { double x[N],re[N],im[N],env[N],p[201],ep[201],ac[25],matrix[24][25],windowed[N],stage_re[N],stage_im[N],analytic_im[N]; } ml_workspace_t;
 static ml_workspace_t *scratch;
-int ml_reference_init(void){if(scratch)return 1;scratch=(ml_workspace_t *)calloc(1,sizeof(*scratch));return scratch!=0;}
+static ml_reference_resource_state_t resource_state=ML_REFERENCE_UNINITIALIZED;
+int ml_reference_init(void){
+ if(scratch)return 1;
+ scratch=(ml_workspace_t *)calloc(1,sizeof(*scratch));
+ resource_state=scratch?ML_REFERENCE_READY:ML_REFERENCE_ALLOCATION_FAILED;
+ return scratch!=0;
+}
+ml_reference_resource_state_t ml_reference_resource_state(void){return resource_state;}
+size_t ml_reference_workspace_bytes(void){return sizeof(ml_workspace_t);}
 #define x (scratch->x)
 #define re (scratch->re)
 #define im (scratch->im)

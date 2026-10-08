@@ -4,6 +4,12 @@
 
 최종보고서의 계산 흐름과 수식은 [상세 해설](docs/report-detail/README.md)에서 읽을 수 있다. 보고서에 연결된 코드 위치와 증거 종류는 [출처·코드 대응표](docs/report-detail/08-sources.md)에 정리되어 있다.
 
+## 보고서 기준과 이후 개선
+
+보고서의 실험 결과는 당시 구현과 실험 조건에 해당한다. 보고서 원문, 기존 평가 기록과 [FG 원본 사본](edge_module_c/esp32/edge_alimi_adxl345_fg_report/source_snapshot/)을 보존하며, 이후의 측정 품질·오류 처리·운영 진단 개선은 [후속 개선 기록](docs/post-report-improvements.md)에서 별도로 설명한다. 후속 버전의 소프트웨어 검사나 빌드 성공을 보고서 당시 결과 또는 새 하드웨어 성능 검증으로 대체하지 않는다.
+
+현재 FG 실행 소스는 `postreport_v2`다. [후보 저장·승인·복원 규칙](docs/baseline-lifecycle.md)을 적용하며 부팅 후에는 측정을 대기한다. [ESP32 설치 파일 준비](docs/firmware-installation.md)까지 지원하고, 실제 장치 업로드와 실측은 별도 단계로 남긴다.
+
 ## 보고서 순서와 구현
 
 | 보고서 순서 | 상세 해설 | 구현 |
