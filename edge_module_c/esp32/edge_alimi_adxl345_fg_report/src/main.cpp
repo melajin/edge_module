@@ -7,6 +7,7 @@
 #include <Preferences.h>
 #include <esp_timer.h>
 #include <esp_system.h>
+#include <esp_heap_caps.h>
 #include "acquisition_quality.h"
 #include <math.h>
 #include <stdlib.h>
@@ -75,6 +76,9 @@ static bool interwindow_overrun = false;
 // Observation bookkeeping deliberately survives reset_temporal().
 static AcquisitionHistory acquisition_history;
 static AcquisitionQuality acquisition;
+// Survives command/diagnostic resets; duration refers only to result printing calls.
+static uint64_t runtime_start_us = 0, previous_emit_seq = 0, previous_emit_call_us = 0;
+static bool have_previous_emit = false;
 static char acquisition_session[17];
 static char command_line[32];
 static unsigned command_length = 0;
@@ -437,6 +441,10 @@ static void print_result(const char *reason, unsigned captured, unsigned fg_edge
                          bool evidence_valid, float ratio,
                          float phase_concentration, int axis)
 {
+    const uint64_t emit_start_us = (uint64_t)esp_timer_get_time();
+    const uint64_t pre_emit_us = emit_start_us - runtime_start_us;
+    multi_heap_info_t heap = {};
+    heap_caps_get_info(&heap, MALLOC_CAP_8BIT);
     const bool measured = captured == V3_SAMPLE_COUNT &&
                           signal->reason == V3_SIGNAL_OK &&
                           signal->sample_rate_hz > 0.0f;
@@ -476,6 +484,16 @@ static void print_result(const char *reason, unsigned captured, unsigned fg_edge
     else Serial.print("null");
     Serial.printf(",\"valid\":%s,\"reason\":\"%s\"}",
                   acquisition.valid ? "true" : "false", acquisition.reason);
+    Serial.printf(",\"runtime\":{\"v\":1,\"pre_emit_us\":%llu,\"previous_emit\":",
+                  (unsigned long long)pre_emit_us);
+    if (have_previous_emit)
+        Serial.printf("{\"seq\":%llu,\"call_us\":%llu}",
+                      (unsigned long long)previous_emit_seq,
+                      (unsigned long long)previous_emit_call_us);
+    else Serial.print("null");
+    Serial.printf(",\"heap\":{\"free_bytes\":%u,\"min_free_bytes\":%u,\"largest_free_bytes\":%u}}",
+                  (unsigned)heap.total_free_bytes, (unsigned)heap.minimum_free_bytes,
+                  (unsigned)heap.largest_free_block);
     Serial.printf(",\"bearing\":\"%s\",\"misalignment\":\"%s\","
                   "\"belt\":\"%s\",\"imbalance\":\"%s\","
                   "\"imbalance_votes\":%u,\"auto_confirm\":false}\n",
@@ -484,6 +502,10 @@ static void print_result(const char *reason, unsigned captured, unsigned fg_edge
                   em_v3_status_name(policy_result.belt.status),
                   em_v3_status_name(policy_result.imbalance.status),
                   policy_result.imbalance.votes_positive);
+    // No flush: this is formatting/queueing-call time, not UART/PC completion.
+    previous_emit_call_us = (uint64_t)esp_timer_get_time() - emit_start_us;
+    previous_emit_seq = acquisition.seq;
+    have_previous_emit = true;
 }
 
 static void process_command(const char *line)
@@ -614,6 +636,7 @@ void loop()
         return;
     }
     acquisition = AcquisitionQuality{};
+    runtime_start_us = (uint64_t)esp_timer_get_time();
     if (!sensor_ready) {
         abort_learning();
         reset_temporal();

@@ -35,6 +35,59 @@ def quality_record(seq: int = 0, session: str = "0123456789abcdef") -> dict:
 
 
 class ReportSerialLoggerTests(unittest.TestCase):
+    def test_runtime_first_previous_error_and_preservation(self) -> None:
+        records = [quality_record(0), quality_record(1), quality_record(2)]
+        for seq, record in enumerate(records):
+            record["runtime"] = {"v": 1, "pre_emit_us": 1283000,
+                "previous_emit": None if seq == 0 else {"seq": seq - 1, "call_us": 740},
+                "heap": {"free_bytes": 240000, "min_free_bytes": 220000, "largest_free_bytes": 120000}}
+        records[2].update(reason="adxl_init", samples=0)
+        records[2]["acquisition"].update(start_us=None, end_us=None, gap_us=None,
+                                         valid=False, reason="no_samples")
+        records[2]["runtime"]["pre_emit_us"] = 0
+        for record in records:
+            self.assertEqual(validate_record(record), [])
+        output = io.StringIO()
+        self.assertEqual(append_report_lines(map(json.dumps, records), output), (3, 0))
+        for original, line in zip(records, output.getvalue().splitlines()):
+            self.assertEqual(json.loads(line)["runtime"], original["runtime"])
+        self.assertEqual(validate_record(report_record()), [])
+
+    def test_runtime_rejects_bad_values_and_relations(self) -> None:
+        def valid():
+            r = quality_record(1)
+            r["runtime"] = {"v": 1, "pre_emit_us": 1283000,
+                "previous_emit": {"seq": 0, "call_us": 740},
+                "heap": {"free_bytes": 100, "min_free_bytes": 80, "largest_free_bytes": 50}}
+            return r
+        cases = [("v", True), ("v", 2), ("pre_emit_us", True), ("pre_emit_us", -1),
+                 ("pre_emit_us", 1.5), ("pre_emit_us", 2**53), ("previous_emit", None),
+                 ("previous_emit", True), ("heap", [])]
+        for key, value in cases:
+            bad = valid(); bad["runtime"][key] = value
+            with self.subTest(key=key, value=value):
+                self.assertTrue(validate_record(bad))
+        for obj, keys in [("previous_emit", ("seq", "call_us")),
+                          ("heap", ("free_bytes", "min_free_bytes", "largest_free_bytes"))]:
+            for key in keys:
+                for value in [True, -1, 2**53, 1.5, None]:
+                    bad = valid(); bad["runtime"][obj][key] = value
+                    self.assertTrue(validate_record(bad))
+                bad = valid(); del bad["runtime"][obj][key]
+                self.assertTrue(validate_record(bad))
+        for key in ["v", "pre_emit_us", "previous_emit", "heap"]:
+            bad = valid(); del bad["runtime"][key]
+            self.assertTrue(validate_record(bad))
+        bad = valid(); bad["runtime"]["previous_emit"]["seq"] = 1
+        self.assertTrue(validate_record(bad))
+        bad = valid(); del bad["acquisition"]
+        self.assertTrue(validate_record(bad))
+        for key in ["min_free_bytes", "largest_free_bytes"]:
+            bad = valid(); bad["runtime"]["heap"][key] = 101
+            self.assertTrue(validate_record(bad))
+        bad = valid(); bad["acquisition"]["seq"] = 0
+        self.assertTrue(validate_record(bad))
+
     def test_valid_report_row_is_written_with_extra_fields_preserved(self) -> None:
         output, errors = io.StringIO(), io.StringIO()
         record = report_record()

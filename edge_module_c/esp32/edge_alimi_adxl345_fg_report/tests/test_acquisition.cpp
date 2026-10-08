@@ -8,6 +8,8 @@
 TestSerial Serial;
 TestWire Wire;
 uint64_t test_clock = 1000000;
+multi_heap_info_t test_heap;
+unsigned test_heap_queries = 0;
 
 static AcquisitionQuality window(uint64_t start, unsigned n = V3_SAMPLE_COUNT,
                                   unsigned step = 2500, float value = 0.1f)
@@ -56,9 +58,16 @@ int main()
     setup();
     assert(Serial.tx_buffer == 2048 && serial_ready);
     Serial.output.clear();
+    Serial.call_cost_us = 37;
+    const uint64_t calls = Serial.calls;
     // Real loop and real print_result: complete sensor data without FG/PPR.
     loop();
     assert(acquisition.valid && acquisition.seq == 0 && !acquisition.have_gap);
+    assert(previous_emit_seq == 0 && previous_emit_call_us == (Serial.calls - calls) * 37);
+    assert(test_heap_queries == 1); // one snapshot per result, never per sample
+    assert(Serial.output.find("\"previous_emit\":null") != std::string::npos);
+    assert(Serial.output.find("\"pre_emit_us\":1282500") != std::string::npos);
+    const uint64_t first_call_us = previous_emit_call_us;
     emit();
     const uint64_t last_end = acquisition.end_us;
     process_command("stop");
@@ -70,6 +79,9 @@ int main()
     Serial.output.clear();
     loop();
     assert(acquisition.valid && acquisition.seq == 1);
+    assert(Serial.output.find("\"previous_emit\":{\"seq\":0,\"call_us\":" +
+                             std::to_string(first_call_us) + "}") != std::string::npos);
+    assert(Serial.output.find("\"pre_emit_us\":1282500") != std::string::npos); // excludes pause
     assert(acquisition.have_gap && acquisition.gap_us == acquisition.start_us - last_end);
     assert(acquisition.gap_us > UINT32_MAX);
     emit();
@@ -81,6 +93,7 @@ int main()
     Wire.fail = true;
     loop(); // initialization failure has the full common JSON schema
     assert(acquisition.count == 0 && acquisition.seq == 3);
+    assert(Serial.output.find("\"previous_emit\":{\"seq\":2") != std::string::npos);
     assert(acquisition_history.last_end_us == partial_end);
     emit();
     Wire.fail = false;
@@ -88,6 +101,7 @@ int main()
     loop();
     assert(acquisition.valid && acquisition.have_gap && acquisition.seq == 4);
     assert(acquisition.gap_us == acquisition.start_us - partial_end);
+    assert(test_heap_queries == 5);
     emit();
 
     // Conservative serialization budget using largest uint64 decimals and
@@ -112,6 +126,14 @@ int main()
     policy_result.misalignment.status = EM_V3_INSPECTION_REQUIRED;
     policy_result.belt.status = EM_V3_INSPECTION_REQUIRED;
     policy_result.imbalance.status = EM_V3_INSPECTION_REQUIRED;
+    previous_emit_seq = UINT64_MAX - 1;
+    previous_emit_call_us = UINT64_MAX;
+    runtime_start_us = 0;
+    test_clock = UINT64_MAX;
+    Serial.call_cost_us = 0;
+    test_heap.total_free_bytes = UINT32_MAX;
+    test_heap.minimum_free_bytes = UINT32_MAX;
+    test_heap.largest_free_block = UINT32_MAX;
     print_result("interwindow_gap_reset", V3_SAMPLE_COUNT, FG_RING_SIZE, &signal,
                  true, 15600, 1, -1);
     emit();

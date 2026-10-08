@@ -95,6 +95,50 @@ def validate_acquisition(record: dict) -> list[str]:
     return errors
 
 
+def validate_runtime(record: dict) -> list[str]:
+    if "runtime" not in record:
+        return []  # Legacy runtime is unknown, never inferred from other fields.
+    r = record["runtime"]
+    if not isinstance(r, dict):
+        return ["runtime: expected an object"]
+    errors = []
+    for key in ("v", "pre_emit_us", "previous_emit", "heap"):
+        if key not in r:
+            errors.append(f"runtime.{key}: missing field")
+    if type(r.get("v")) is not int or r["v"] != 1:
+        errors.append("runtime.v: expected 1")
+    if not _is_counter(r.get("pre_emit_us")):
+        errors.append("runtime.pre_emit_us: expected a nonnegative safe integer")
+    a = record.get("acquisition")
+    seq = a.get("seq") if isinstance(a, dict) else None
+    if not _is_counter(seq):
+        errors.append("runtime: acquisition.seq is required")
+    previous = r.get("previous_emit")
+    if previous is not None:
+        if not isinstance(previous, dict):
+            errors.append("runtime.previous_emit: expected an object or null")
+        else:
+            for key in ("seq", "call_us"):
+                if not _is_counter(previous.get(key)):
+                    errors.append(f"runtime.previous_emit.{key}: expected a nonnegative safe integer")
+            if _is_counter(seq) and _is_counter(previous.get("seq")) and previous["seq"] != seq - 1:
+                errors.append("runtime.previous_emit.seq: must identify the preceding attempt")
+    elif _is_counter(seq) and seq != 0:
+        errors.append("runtime.previous_emit: null is only valid for the first attempt")
+    heap = r.get("heap")
+    if not isinstance(heap, dict):
+        errors.append("runtime.heap: expected an object")
+    else:
+        keys = ("free_bytes", "min_free_bytes", "largest_free_bytes")
+        for key in keys:
+            if not _is_counter(heap.get(key)):
+                errors.append(f"runtime.heap.{key}: expected a nonnegative safe integer")
+        if all(_is_counter(heap.get(key)) for key in keys):
+            if heap["min_free_bytes"] > heap["free_bytes"] or heap["largest_free_bytes"] > heap["free_bytes"]:
+                errors.append("runtime.heap: minimum/largest free cannot exceed total free")
+    return errors
+
+
 class SequenceTracker:
     """Receiver evidence only: sequence continuity is not a CRC check."""
 
@@ -175,7 +219,7 @@ def validate_record(value: object) -> list[str]:
     if isinstance(votes, bool) or not isinstance(votes, int):
         errors.append("imbalance_votes: expected an integer")
 
-    return errors + validate_acquisition(value)
+    return errors + validate_acquisition(value) + validate_runtime(value)
 
 
 def parse_report_line(line: bytes | str) -> tuple[dict | None, str | None]:

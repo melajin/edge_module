@@ -44,7 +44,28 @@ def main() -> int:
         assert rows[3]["acquisition"]["end_us"] is None
         assert rows[3]["acquisition"]["gap_us"] is None
         assert rows[4]["acquisition"]["valid"]
+        for row in rows:
+            runtime = row["runtime"]
+            assert runtime["v"] == 1
+            assert runtime["pre_emit_us"] >= 0
+            assert runtime["heap"]["largest_free_bytes"] <= runtime["heap"]["free_bytes"]
+            assert runtime["heap"]["min_free_bytes"] <= runtime["heap"]["free_bytes"]
+            previous = runtime["previous_emit"]
+            if row["acquisition"]["seq"] == 0:
+                assert previous is None
+            else:
+                assert previous["seq"] == row["acquisition"]["seq"] - 1
+                assert previous["call_us"] > 0
+        assert rows[0]["runtime"]["pre_emit_us"] == rows[1]["runtime"]["pre_emit_us"] == rows[4]["runtime"]["pre_emit_us"] == 1282500
+        assert rows[2]["runtime"]["pre_emit_us"] == 12500
+        assert rows[3]["runtime"]["pre_emit_us"] == 0
+        sys.path.insert(0, str(PROJECT.parents[1] / "pi"))
+        from report_serial_logger import validate_record
+        for row in rows[:5]:
+            assert validate_record(row) == [], validate_record(row)
         longest = max(len(line.encode()) + 1 for line in output.splitlines())
+        assert longest < 1152, "conservative complete JSON exceeds 100 ms 8N1 budget"
+        assert longest < 2048, "conservative complete JSON exceeds the TX queue"
         assert longest * 10 / 115200 < 0.100, "JSON alone exhausts the 100 ms gap budget"
         print(f"Acquisition and main.cpp JSON checks passed; conservative frame {longest} bytes, "
               f"115200 8N1 wire time {longest * 10 / 115200 * 1000:.2f} ms")

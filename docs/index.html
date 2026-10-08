@@ -17,6 +17,7 @@
     .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:9px;background:var(--card)}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#eef2ed;color:var(--muted);font-size:.8rem;font-weight:750}tr:last-child td{border-bottom:0}code,.mono{font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere}.note{padding:15px 17px;border-left:3px solid var(--green);background:var(--green-soft);border-radius:0 8px 8px 0;color:#36564a}
     .import-box{padding:20px;border:1px solid var(--line);border-radius:10px;background:var(--card)}.file-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.file-row input{max-width:100%;font:inherit}.import-status{margin:13px 0 8px;color:var(--muted);font-size:.9rem}.errors{margin:0 0 12px;color:var(--red);font-size:.9rem}.record-table{min-width:900px;font-size:.88rem}.record-table td{font-family:var(--mono);font-size:.82rem}.record-table td.source{font-family:inherit;white-space:nowrap}.raw-record{max-width:380px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem}.empty{padding:22px;color:var(--muted);text-align:center}.archive{display:flex;flex-wrap:wrap;gap:15px;align-items:center;justify-content:space-between}
     .record-table tr>:nth-child(n+2):nth-child(-n+5){word-break:keep-all}.record-table tr>:nth-child(2){min-width:240px}.record-table tr>:nth-child(3){min-width:200px}.record-table tr>:nth-child(4){min-width:320px}.record-table tr>:nth-child(5){min-width:200px}
+    .record-table tr>:nth-child(6){min-width:420px;word-break:keep-all}.record-table tr>:nth-child(6) summary{white-space:nowrap}.record-table tr>:nth-child(6) pre{width:380px;max-width:none;white-space:pre-wrap;overflow-wrap:normal;word-break:keep-all;margin:8px 0}
     footer{padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}.source-link{font-family:var(--mono);font-size:.84rem}
     @media(max-width:760px){main{width:min(100% - 26px,1080px);padding-top:36px}.specs{grid-template-columns:repeat(2,1fr)}.pathways,.chapters{grid-template-columns:1fr}.archive{align-items:flex-start}}
     @media(max-width:420px){.specs{grid-template-columns:1fr 1fr;gap:7px}.spec{padding:12px}.spec strong{font-size:.9rem}th,td{padding:10px}}
@@ -95,7 +96,7 @@ function validateRecord(value) {
   if (!(value.amp_1x_g === null || (Array.isArray(value.amp_1x_g) && value.amp_1x_g.length === 3 && value.amp_1x_g.every(item => typeof item === "number" && Number.isFinite(item))))) errors.push("amp_1x_g: 세 축의 유한 숫자 배열 또는 null이어야 합니다.");
   if (typeof value.imbalance !== "string") errors.push("imbalance: 문자열이어야 합니다.");
   if (!Number.isInteger(value.imbalance_votes)) errors.push("imbalance_votes: 정수여야 합니다.");
-  return errors.concat(validateAcquisition(value));
+  return errors.concat(validateAcquisition(value), validateRuntime(value));
 }
 function validateAcquisition(record) {
   if (!Object.prototype.hasOwnProperty.call(record, "acquisition")) return [];
@@ -128,6 +129,35 @@ function validateAcquisition(record) {
   }
   if (a.seq === 0 && gap !== null) errors.push("acquisition: 첫 취득시도에는 이전 공백이 없습니다.");
   if (start !== null && gap !== null && gap > start) errors.push("acquisition: 공백이 부팅 시각을 초과합니다.");
+  return errors;
+}
+function validateRuntime(record) {
+  if (!Object.prototype.hasOwnProperty.call(record, "runtime")) return [];
+  const r = record.runtime, errors = [], counter = n => Number.isSafeInteger(n) && n >= 0;
+  const object = n => n !== null && typeof n === "object" && !Array.isArray(n);
+  if (!object(r)) return ["runtime: 객체가 필요합니다."];
+  for (const key of ["v", "pre_emit_us", "previous_emit", "heap"])
+    if (!Object.prototype.hasOwnProperty.call(r, key)) errors.push(`runtime.${key}: 필드가 없습니다.`);
+  if (r.v !== 1) errors.push("runtime.v: 버전 1이 필요합니다.");
+  if (!counter(r.pre_emit_us)) errors.push("runtime.pre_emit_us: 음수가 아닌 안전한 정수가 필요합니다.");
+  const seq = object(record.acquisition) ? record.acquisition.seq : undefined;
+  if (!counter(seq)) errors.push("runtime: acquisition.seq가 필요합니다.");
+  if (r.previous_emit !== null) {
+    if (!object(r.previous_emit)) errors.push("runtime.previous_emit: 객체 또는 null이 필요합니다.");
+    else {
+      for (const key of ["seq", "call_us"])
+        if (!counter(r.previous_emit[key])) errors.push(`runtime.previous_emit.${key}: 음수가 아닌 안전한 정수가 필요합니다.`);
+      if (counter(seq) && counter(r.previous_emit.seq) && r.previous_emit.seq !== seq - 1)
+        errors.push("runtime.previous_emit.seq: 직전 취득시도 순번이어야 합니다.");
+    }
+  } else if (counter(seq) && seq !== 0) errors.push("runtime.previous_emit: 첫 취득시도만 null입니다.");
+  if (!object(r.heap)) errors.push("runtime.heap: 객체가 필요합니다.");
+  else {
+    const keys = ["free_bytes", "min_free_bytes", "largest_free_bytes"];
+    for (const key of keys) if (!counter(r.heap[key])) errors.push(`runtime.heap.${key}: 음수가 아닌 안전한 정수가 필요합니다.`);
+    if (keys.every(key => counter(r.heap[key])) && (r.heap.min_free_bytes > r.heap.free_bytes || r.heap.largest_free_bytes > r.heap.free_bytes))
+      errors.push("runtime.heap: 최소/최대 연속 여유량은 총 여유량 이하여야 합니다.");
+  }
   return errors;
 }
 class SequenceTracker {
@@ -178,19 +208,32 @@ function qualityCells(row) {
   return [transport, quality, range, gap];
 }
 function displayValue(value) { return value === null ? "null" : Array.isArray(value) ? `[${value.map(displayValue).join(", ")}]` : String(value); }
+function runtimeCell(value) {
+  const r = value.runtime;
+  if (!r) return "미확인 · 실행 관측 없음";
+  const previous = r.previous_emit === null ? "첫 결과 · 이전 호출 없음" :
+    `이전 순번 ${r.previous_emit.seq}: ${r.previous_emit.call_us} µs`;
+  return `현재 취득·처리 ${r.pre_emit_us} µs\n이전 결과 출력 호출 ${previous}\n` +
+    `8-bit heap 여유 ${r.heap.free_bytes} B / allocator 영역별 최저 합 ${r.heap.min_free_bytes} B / 최대 연속 ${r.heap.largest_free_bytes} B\n` +
+    "출력 호출은 포맷·큐잉 시간 · 전송 완료/PC 수신 시간 미측정";
+}
 function renderRecords(rows, filename) {
   const wrap = document.getElementById("recordTableWrap");
   wrap.replaceChildren();
   if (!rows.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "형식 확인을 통과한 JSON 행이 없습니다."; wrap.append(empty); return; }
   const table = document.createElement("table"); table.className = "record-table";
   const thead = document.createElement("thead"), headRow = document.createElement("tr");
-  for (const label of ["자료 출처", "수신 순번 (파일 내 계산)", "센서 창 품질", "읽기 시작 시각 · 부팅 기준", "창간 미관측 경계", ...REQUIRED, "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
+  for (const label of ["자료 출처", "수신 순번 (파일 내 계산)", "센서 창 품질", "읽기 시작 시각 · 부팅 기준", "창간 미관측 경계", "실행 관측 (µs / B)", ...REQUIRED, "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
   thead.append(headRow); table.append(thead);
   const tbody = document.createElement("tbody");
   for (const row of rows) {
     const tr = document.createElement("tr"), source = document.createElement("td");
     source.className = "source"; source.textContent = `${filename}:${row.line}`; tr.append(source);
     for (const value of qualityCells(row)) { const td = document.createElement("td"); td.textContent = value; tr.append(td); }
+    const runtime = document.createElement("td"), runtimeDetails = document.createElement("details"), runtimeSummary = document.createElement("summary"), runtimeText = document.createElement("pre");
+    runtimeSummary.textContent = row.value.runtime ? "실행 관측 펼치기" : "미확인";
+    runtimeText.className = "raw-record"; runtimeText.textContent = runtimeCell(row.value);
+    runtimeDetails.append(runtimeSummary, runtimeText); runtime.append(runtimeDetails); tr.append(runtime);
     for (const key of REQUIRED) { const td = document.createElement("td"); td.textContent = displayValue(row.value[key]); tr.append(td); }
     const raw = document.createElement("td"), details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre");
     raw.className = "raw-record"; summary.textContent = "행 펼치기"; pre.textContent = JSON.stringify(row.value, null, 2); details.append(summary, pre); raw.append(details); tr.append(raw);

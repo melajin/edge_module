@@ -12,10 +12,12 @@ typedef int portMUX_TYPE;
 #define portEXIT_CRITICAL(x) ((void)(x))
 #define portENTER_CRITICAL_ISR(x) ((void)(x))
 #define portEXIT_CRITICAL_ISR(x) ((void)(x))
+extern uint64_t test_clock;
 struct TestSerial {
     std::string output;
     size_t tx_buffer = 0;
     bool begun = false, fail_config = false, fail_driver = false;
+    uint64_t call_cost_us = 0, calls = 0;
     size_t setTxBufferSize(size_t bytes) {
         if (begun) std::abort();
         tx_buffer = fail_config ? 0 : bytes;
@@ -25,13 +27,15 @@ struct TestSerial {
     explicit operator bool() const { return begun && !fail_driver; }
     int available() { return 0; }
     int read() { return -1; }
-    void print(const char *s) { output += s; }
-    void println(const char *s) { output += s; output += '\n'; }
+    void print(const char *s) { output += s; test_clock += call_cost_us; ++calls; }
+    void println(const char *s) { output += s; output += '\n'; test_clock += call_cost_us; ++calls; }
     template<typename... Args> void printf(const char *format, Args... args) {
         char buffer[4096];
         const int n = std::snprintf(buffer, sizeof(buffer), format, args...);
         if (n < 0 || n >= (int)sizeof(buffer)) std::abort();
         output.append(buffer, (size_t)n);
+        test_clock += call_cost_us;
+        ++calls;
     }
 };
 extern TestSerial Serial;

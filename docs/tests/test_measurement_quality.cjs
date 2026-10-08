@@ -26,6 +26,38 @@ const row = (seq = 0, session = '0123456789abcdef') => ({...legacy(), samples:51
   acquisition:{v:1,session,seq,start_us:1000000+seq*2000000,end_us:2277500+seq*2000000,
     gap_us:seq===0?null:722500,valid:true,reason:'ok'}});
 const lines = [row(0),row(1),row(3),row(3),row(2),row(4),row(0,'fedcba9876543210'),legacy(),row(2)];
+const runtimeRow = (seq = 0) => ({...row(seq), runtime:{v:1,pre_emit_us:1283000,
+  previous_emit:seq===0?null:{seq:seq-1,call_us:740},
+  heap:{free_bytes:240000,min_free_bytes:220000,largest_free_bytes:120000}}});
+assert.equal(context.validateRecord(runtimeRow()).length,0);
+assert.equal(context.validateRecord(runtimeRow(1)).length,0);
+for (const [key,value] of [['v',true],['v',2],['pre_emit_us',true],['pre_emit_us',-1],
+  ['pre_emit_us',2**53],['pre_emit_us',1.5],['previous_emit',null],['previous_emit',true],['heap',[]]]) {
+  const bad=runtimeRow(1); bad.runtime[key]=value;
+  assert.ok(context.validateRecord(bad).length,`runtime.${key}`);
+}
+for (const [nested,keys] of [['previous_emit',['seq','call_us']],['heap',['free_bytes','min_free_bytes','largest_free_bytes']]]) {
+  for (const key of keys) {
+    for (const value of [true,-1,2**53,1.5,null]) {
+      const bad=runtimeRow(1); bad.runtime[nested][key]=value;
+      assert.ok(context.validateRecord(bad).length,`${nested}.${key}`);
+    }
+    const bad=runtimeRow(1); delete bad.runtime[nested][key];
+    assert.ok(context.validateRecord(bad).length);
+  }
+}
+for (const key of ['v','pre_emit_us','previous_emit','heap']) {
+  const bad=runtimeRow(); delete bad.runtime[key]; assert.ok(context.validateRecord(bad).length);
+}
+for (const key of ['min_free_bytes','largest_free_bytes']) {
+  const bad=runtimeRow(); bad.runtime.heap[key]=240001; assert.ok(context.validateRecord(bad).length);
+}
+const wrongPrevious=runtimeRow(1); wrongPrevious.runtime.previous_emit.seq=1;
+assert.ok(context.validateRecord(wrongPrevious).length);
+const missingAcquisition=runtimeRow(); delete missingAcquisition.acquisition;
+assert.ok(context.validateRecord(missingAcquisition).length);
+const nonnullFirst=runtimeRow(); nonnullFirst.runtime.previous_emit={seq:0,call_us:0};
+assert.ok(context.validateRecord(nonnullFirst).length);
 const result = parse(lines.map(JSON.stringify).join('\n')+'\n{broken\n'+JSON.stringify(row(3)));
 assert.equal(result.errors.length,1);
 assert.deepEqual(Array.from(result.accepted, r=>r.transport.status),
@@ -43,6 +75,9 @@ for (const count of [true,-1,0,1,511,513]) {
 const no = row(1); no.samples=0;
 Object.assign(no.acquisition,{start_us:null,end_us:null,gap_us:null,valid:false,reason:'no_samples'});
 assert.equal(context.validateRecord(no).length,0);
+const noRuntime={...no,runtime:runtimeRow(1).runtime};
+noRuntime.runtime.pre_emit_us=0;
+assert.equal(context.validateRecord(noRuntime).length,0);
 const partial=row(2); partial.samples=3;
 Object.assign(partial.acquisition,{end_us:5005000,valid:false,reason:'partial_window'});
 assert.equal(context.validateRecord(partial).length,0);
@@ -51,7 +86,7 @@ const forged=row(); forged.collector_report_transport={status:'contiguous',missi
 assert.equal(parse(JSON.stringify(forged)).accepted[0].transport.status,'first');
 const attack='<img src=x onerror=alert(1)>';
 const xss={...legacy(),reason:attack};
-const display=parse([legacy(),row(),no,partial,xss].map(JSON.stringify).join('\n')).accepted;
+const display=parse([legacy(),row(),no,partial,xss,runtimeRow(),runtimeRow(1),noRuntime].map(JSON.stringify).join('\n')).accepted;
 context.renderRecords(display,attack+'.jsonl');
 const flatten = element => element.textContent+' '+element.children.map(flatten).join(' ');
 const rendered=flatten(elements.get('recordTableWrap'));
@@ -61,6 +96,12 @@ assert.ok(rendered.includes('관측 표본 없음'));
 assert.ok(rendered.includes('partial_window'));
 assert.ok(rendered.includes('상태 미관측'));
 assert.ok(rendered.includes('수신 순번 (파일 내 계산)'));
+assert.ok(rendered.includes('실행 관측 (µs / B)'));
+assert.ok(rendered.includes('첫 결과 · 이전 호출 없음'));
+assert.ok(rendered.includes('이전 순번 0: 740 µs'));
+assert.ok(rendered.includes('allocator 영역별 최저 합 220000 B'));
+assert.ok(rendered.includes('전송 완료/PC 수신 시간 미측정'));
+assert.ok(rendered.includes('미확인 · 실행 관측 없음'));
 context.renderRecords([], 'empty');
 assert.ok(flatten(elements.get('recordTableWrap')).includes('행이 없습니다'));
 (async()=>{
