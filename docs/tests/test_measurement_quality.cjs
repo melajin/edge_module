@@ -25,6 +25,69 @@ const legacy = () => ({reason:'phase_history_warmup',fs_hz:null,fg_hz:null,rpm:n
 const row = (seq = 0, session = '0123456789abcdef') => ({...legacy(), samples:512,
   acquisition:{v:1,session,seq,start_us:1000000+seq*2000000,end_us:2277500+seq*2000000,
     gap_us:seq===0?null:722500,valid:true,reason:'ok'}});
+const profile = () => ({event:'profile',v:1,command:'profile',ok:true,reason:'ok',firmware:'postreport_v2',
+  profile:{selected:{context_id:'bench-1',ppr:2},current:null,candidate:null,previous:null,
+    baseline_ready:false,learning:false,learn_count:0,paused:false,
+    storage:{hold:false,reason:'ok',generation:0},legacy:{valid:false,reason:'absent'}}});
+const baseline = (id=1) => ({id,context_id:'bench-1',ppr:2,amplitude_g:[.001,.2,4],learn_count:336,
+  origin:'learned',session:'0123456789abcdef',seq:7});
+const ready=profile(); Object.assign(ready.profile,{current:baseline(),candidate:baseline(2),previous:baseline(3),baseline_ready:true});
+assert.equal(context.validateRecord(ready).length,0);
+const fresh=profile(); Object.assign(fresh.profile.selected,{context_id:null,ppr:0});
+assert.equal(context.validateRecord(fresh).length,0);
+fresh.profile.selected.ppr=2; assert.equal(context.validateRecord(fresh).length,0);
+const clone = v => JSON.parse(JSON.stringify(v));
+for (const [parts,values] of [
+  [['v'],[true,2]], [['event'],['unknown']], [['command'],['unknown',[]]], [['ok'],[1]],
+  [['reason'],['<img>','x'.repeat(65),'']], [['firmware'],['v3']],
+  [['profile','selected','ppr'],[true,-1,17,1.5]],
+  [['profile','current','id'],[true,0,2**32]],
+  [['profile','current','context_id'],[null,'x'.repeat(13),'<script>']],
+  [['profile','current','ppr'],[0,17,true]],
+  [['profile','current','seq'],[true,-1,2**53]],
+  [['profile','current','session'],['0123456789ABCDEF',null]],
+  [['profile','current','amplitude_g'],[[true,.2,1],[0,.2,1],[.1,.2,4.01],[.1,Infinity,1],[]]],
+  [['profile','current','learn_count'],[true,0,335]],
+  [['profile','current','origin'],['unknown',[]]],
+  [['profile','storage','generation'],[true,-1,2**32]],
+  [['profile','storage','hold'],[1,true]],
+  [['profile','learn_count'],[true,-1,337,1]], [['profile','paused'],[1]],
+  [['profile','learning'],[1]], [['profile','legacy','valid'],[1]],
+]) for (const value of values) {
+  const bad=clone(ready); let obj=bad;
+  for (const k of parts.slice(0,-1)) obj=obj[k];
+  obj[parts.at(-1)]=value;
+  assert.ok(context.validateRecord(bad).length, parts.join('.')+': '+String(value));
+}
+for (const parts of [[],['profile'],['profile','selected'],['profile','current'],['profile','storage'],['profile','legacy']]) {
+  let obj=ready; for (const k of parts) obj=obj[k];
+  for (const key of Object.keys(obj)) {
+    const bad=clone(ready); let at=bad; for (const k of parts) at=at[k];
+    delete at[key]; assert.ok(context.validateRecord(bad).length,'missing '+key);
+  }
+  const bad=clone(ready); let at=bad; for (const k of parts) at=at[k];
+  at.extra=1; assert.ok(context.validateRecord(bad).length,'unknown field');
+}
+for (const update of [p=>p.candidate.id=1,p=>p.selected.ppr=3,p=>p.current=null]) {
+  const bad=clone(ready); update(bad.profile); assert.ok(context.validateRecord(bad).length);
+}
+const imported=clone(ready); Object.assign(imported.profile.current,{origin:'legacy_import',learn_count:0});
+assert.equal(context.validateRecord(imported).length,0);
+const learning=clone(ready); Object.assign(learning.profile,{learning:true,learn_count:7});
+assert.equal(context.validateRecord(learning).length,0);
+for (const [condition,id] of [[null,null],['bench-1',null],['bench-1',1]])
+  assert.equal(context.validateRecord({...legacy(),context_id:condition,baseline_id:id}).length,0);
+for (const extra of [{context_id:'bench-1'},{baseline_id:1},{context_id:null,baseline_id:1},
+  {context_id:'<img>',baseline_id:null},{context_id:'bench-1',baseline_id:true}])
+  assert.ok(context.validateRecord({...legacy(),...extra}).length);
+const mixed=parse([legacy(),row(),ready,row(1),ready,row(3),ready,row(0,'fedcba9876543210')].map(JSON.stringify).join('\n'));
+assert.equal(mixed.errors.length,0);
+assert.deepEqual(Array.from(mixed.accepted.filter(r=>r.value.event!=='profile'),r=>r.transport.status),['unknown','first','contiguous','gap','session_changed']);
+assert.ok(mixed.accepted.filter(r=>r.value.event==='profile').every(r=>r.transport===null));
+const forgedEvent=clone(ready); forgedEvent.collector_report_transport={status:'forged'};
+assert.equal(parse(JSON.stringify(forgedEvent)).accepted.length,0);
+const malicious=clone(ready); malicious.profile.current.context_id='<img src=x onerror=alert(1)>';
+assert.equal(parse(JSON.stringify(malicious)).accepted.length,0);
 const lines = [row(0),row(1),row(3),row(3),row(2),row(4),row(0,'fedcba9876543210'),legacy(),row(2)];
 const runtimeRow = (seq = 0) => ({...row(seq), runtime:{v:1,pre_emit_us:1283000,
   previous_emit:seq===0?null:{seq:seq-1,call_us:740},
@@ -102,8 +165,24 @@ assert.ok(rendered.includes('이전 순번 0: 740 µs'));
 assert.ok(rendered.includes('allocator 영역별 최저 합 220000 B'));
 assert.ok(rendered.includes('전송 완료/PC 수신 시간 미측정'));
 assert.ok(rendered.includes('미확인 · 실행 관측 없음'));
+context.renderRecords(mixed.accepted, attack+'.jsonl');
+const profileRendered=flatten(elements.get('profileTableWrap'));
+for (const label of ['성공','bench-1','운영 기준','승인 대기 후보 (판정 기준 아님)','이전 기준','저장 hold','일시','학습창 336','0123456789abcdef','취득 순번 7',attack]) {
+  // paused false displays 계속; exercise paused failure separately below.
+  if (label==='일시') continue;
+  assert.ok(profileRendered.includes(label),label);
+}
+const failure=clone(ready); Object.assign(failure,{command:'recover',ok:false,reason:'storage_write'});
+Object.assign(failure.profile,{baseline_ready:false,paused:true,learning:true,learn_count:7});
+failure.profile.storage.hold=true;
+context.renderRecords(parse(JSON.stringify(failure)).accepted,attack+'.jsonl');
+const held=flatten(elements.get('profileTableWrap'));
+assert.ok(held.includes('실패')); assert.ok(held.includes('일시 정지')); assert.ok(held.includes('활성 (운영 판정 보류)'));
+assert.ok(held.includes('학습 진행 중 (판정 보류)')); assert.ok(held.includes('설비 고장 진단이 아닙니다'));
+assert.ok(!flatten(elements.get('recordTableWrap')).includes('storage_write'));
 context.renderRecords([], 'empty');
-assert.ok(flatten(elements.get('recordTableWrap')).includes('행이 없습니다'));
+assert.ok(flatten(elements.get('profileTableWrap')).includes('이벤트가 없습니다'));
+assert.ok(flatten(elements.get('recordTableWrap')).includes('표시할 측정 기록이 없습니다.'));
 (async()=>{
   await elements.get('recordFile').listeners.change({target:{files:[{name:'test.jsonl',text:async()=>JSON.stringify(row())}]}});
   assert.ok(elements.get('importStatus').textContent.includes('형식 확인 1행'));

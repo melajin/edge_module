@@ -15,6 +15,7 @@ typedef int portMUX_TYPE;
 extern uint64_t test_clock;
 struct TestSerial {
     std::string output;
+    std::string input;
     size_t tx_buffer = 0;
     bool begun = false, fail_config = false, fail_driver = false;
     uint64_t call_cost_us = 0, calls = 0;
@@ -25,8 +26,8 @@ struct TestSerial {
     }
     void begin(unsigned) { begun = true; }
     explicit operator bool() const { return begun && !fail_driver; }
-    int available() { return 0; }
-    int read() { return -1; }
+    int available() { return (int)input.size(); }
+    int read() { if (input.empty()) return -1; const int c = (unsigned char)input[0]; input.erase(0, 1); return c; }
     void print(const char *s) { output += s; test_clock += call_cost_us; ++calls; }
     void println(const char *s) { output += s; output += '\n'; test_clock += call_cost_us; ++calls; }
     template<typename... Args> void printf(const char *format, Args... args) {

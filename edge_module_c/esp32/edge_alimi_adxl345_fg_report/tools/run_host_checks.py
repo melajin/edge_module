@@ -24,10 +24,26 @@ def main() -> int:
             "-Isrc", "src/v3_signal.c", "tests/test_signal.c", "-lm", "-o", str(executable),
         ])
         run([str(executable)])
+        profile_executable = Path(temp) / "test_profiles.exe"
+        run([
+            "g++", "-std=c++11", "-Wall", "-Wextra", "-Werror", "-pedantic",
+            "-Itests/stubs", "-Isrc", "src/acquisition_quality.cpp", "src/profile_manager.cpp",
+            "src/v3_signal.c", "src/em_v3.c", "tests/test_profiles.cpp",
+            "-o", str(profile_executable),
+        ])
+        profile_output = subprocess.check_output([str(profile_executable)], cwd=PROJECT, text=True)
+        profile_lines = profile_output.splitlines()
+        detail = json.loads(profile_lines[0])
+        assert detail["event"] == "profile" and detail["v"] == 1
+        assert detail["profile"]["baseline_ready"]
+        assert [detail["profile"][slot]["id"] for slot in ("current", "candidate", "previous")] == [3, 4, 1]
+        assert detail["profile"]["candidate"]["seq"] == 7
+        print(profile_lines[1])
         acquisition_executable = Path(temp) / "test_acquisition.exe"
         run([
             "g++", "-std=c++11", "-Wall", "-Wextra", "-Werror", "-pedantic",
             "-Itests/stubs", "-Isrc", "src/acquisition_quality.cpp",
+            "src/profile_manager.cpp",
             "src/v3_signal.c", "src/em_v3.c", "tests/test_acquisition.cpp",
             "-o", str(acquisition_executable),
         ])

@@ -1,6 +1,7 @@
 """Focused tests for report serial JSON validation and JSONL writing."""
 from __future__ import annotations
 
+import copy
 import io
 import json
 import unittest
@@ -34,7 +35,94 @@ def quality_record(seq: int = 0, session: str = "0123456789abcdef") -> dict:
     return record
 
 
+def profile_event() -> dict:
+    return {"event":"profile", "v":1, "command":"profile", "ok":True, "reason":"ok", "firmware":"postreport_v2",
+        "profile":{"selected":{"context_id":"bench-1", "ppr":2}, "current":None, "candidate":None, "previous":None,
+          "baseline_ready":False, "learning":False, "learn_count":0, "paused":False,
+          "storage":{"hold":False,"reason":"ok","generation":0}, "legacy":{"valid":False,"reason":"absent"}}}
+
+
+def baseline(identifier=1) -> dict:
+    return {"id":identifier,"context_id":"bench-1","ppr":2,"amplitude_g":[.001,.2,4],"learn_count":336,
+            "origin":"learned","session":"0123456789abcdef","seq":7}
+
+
 class ReportSerialLoggerTests(unittest.TestCase):
+    def test_profile_mixed_jsonl_does_not_consume_measurement_sequence(self):
+        event = profile_event()
+        event["profile"]["candidate"] = baseline()
+        records = [report_record(), quality_record(0), event, quality_record(1), event,
+                   quality_record(3), event, quality_record(0, "fedcba9876543210")]
+        output = io.StringIO()
+        self.assertEqual(append_report_lines(map(json.dumps,records),output),(8,0))
+        saved = list(map(json.loads,output.getvalue().splitlines()))
+        self.assertEqual(saved[2],event)
+        self.assertEqual([r["collector_report_transport"]["status"] for r in saved if "event" not in r],
+                         ["unknown","first","contiguous","gap","session_changed"])
+        self.assertEqual(saved[5]["collector_report_transport"]["missing"],1)
+
+    def test_profile_strict_values_and_relationships(self):
+        e = profile_event(); p = e["profile"]
+        p["current"] = baseline(); p["baseline_ready"] = True
+        p["candidate"] = baseline(2); p["previous"] = baseline(3)
+        self.assertEqual(validate_record(e),[])
+        for path, values in [
+            (("v",),[True,2]), (("command",),["unknown",[]]), (("ok",),[1]),
+            (("reason",),["<img>","x"*65,""]), (("firmware",),["v3"]),
+            (("profile","selected","ppr"),[True,-1,17,1.5]),
+            (("profile","current","id"),[True,0,2**32]),
+            (("profile","current","context_id"),[None,"x"*13,"<script>"]),
+            (("profile","current","ppr"),[0,17,True]),
+            (("profile","current","seq"),[True,-1,2**53]),
+            (("profile","current","session"),["0123456789ABCDEF",None]),
+            (("profile","current","amplitude_g"),[[True,.2,1],[0,.2,1],[.1,.2,4.01],[.1,float('inf'),1],[]]),
+            (("profile","current","learn_count"),[True,0,335]),
+            (("profile","current","origin"),["unknown",[]]),
+            (("profile","storage","generation"),[True,-1,2**32]),
+            (("profile","storage","hold"),[1,True]),
+            (("profile","learning"),[1]), (("profile","learn_count"),[True,-1,337,1]),
+            (("profile","legacy","valid"),[1]), (("profile","paused"),[1]),
+        ]:
+            for value in values:
+                bad = copy.deepcopy(e); at = bad
+                for key in path[:-1]: at = at[key]
+                at[path[-1]] = value
+                with self.subTest(path=path,value=value): self.assertTrue(validate_record(bad))
+        for path in [(),("profile",),("profile","current"),("profile","selected"),("profile","storage"),("profile","legacy")]:
+            bad=copy.deepcopy(e); at=bad
+            for key in path: at=at[key]
+            for key in list(at):
+                missing=copy.deepcopy(bad); obj=missing
+                for step in path: obj=obj[step]
+                del obj[key]; self.assertTrue(validate_record(missing))
+            at["extra"]=1; self.assertTrue(validate_record(bad))
+        bad=copy.deepcopy(e); bad["profile"]["candidate"]["id"]=1
+        self.assertTrue(validate_record(bad))
+        bad=copy.deepcopy(e); bad["profile"]["selected"]["ppr"]=3
+        self.assertTrue(validate_record(bad))
+        bad=copy.deepcopy(e); bad["profile"]["current"]=None
+        self.assertTrue(validate_record(bad))
+        imported=copy.deepcopy(e); imported["profile"]["current"].update(origin="legacy_import",learn_count=0)
+        self.assertEqual(validate_record(imported),[])
+        fresh=profile_event(); fresh["profile"]["selected"].update(context_id=None,ppr=0)
+        self.assertEqual(validate_record(fresh),[])
+        fresh["profile"]["selected"]["ppr"]=2
+        self.assertEqual(validate_record(fresh),[])
+        p["learning"]=True; p["learn_count"]=7
+        self.assertEqual(validate_record(e),[])  # Ready current can coexist with learning.
+
+    def test_measurement_profile_pairs_and_event_collision(self):
+        for context, identifier in [(None,None),("bench-1",None),("bench-1",1)]:
+            self.assertEqual(validate_record(dict(report_record(),context_id=context,baseline_id=identifier)),[])
+        for extra in [{"context_id":"bench-1"},{"baseline_id":1},{"context_id":None,"baseline_id":1},
+                      {"context_id":"<img>","baseline_id":None},{"context_id":"bench-1","baseline_id":True}]:
+            self.assertTrue(validate_record(dict(report_record(),**extra)))
+        event=profile_event(); event["collector_report_transport"]={"status":"forged"}
+        output=io.StringIO()
+        self.assertEqual(append_report_lines([json.dumps(event)],output,io.StringIO()),(0,1))
+        malformed=profile_event(); malformed["event"]="unknown"
+        self.assertTrue(validate_record(malformed))
+
     def test_runtime_first_previous_error_and_preservation(self) -> None:
         records = [quality_record(0), quality_record(1), quality_record(2)]
         for seq, record in enumerate(records):

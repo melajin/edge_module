@@ -20,6 +20,7 @@
     .record-table tr>:nth-child(6){min-width:420px;word-break:keep-all}.record-table tr>:nth-child(6) summary{white-space:nowrap}.record-table tr>:nth-child(6) pre{width:380px;max-width:none;white-space:pre-wrap;overflow-wrap:normal;word-break:keep-all;margin:8px 0}
     footer{padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:.86rem}.source-link{font-family:var(--mono);font-size:.84rem}
     @media(max-width:760px){main{width:min(100% - 26px,1080px);padding-top:36px}.specs{grid-template-columns:repeat(2,1fr)}.pathways,.chapters{grid-template-columns:1fr}.archive{align-items:flex-start}}
+    .profile-table td{white-space:pre-wrap;min-width:190px}.profile-table tr>:nth-child(6){min-width:190px}.profile-table tr>:nth-child(3),.profile-table tr>:nth-child(7){min-width:270px}
     @media(max-width:420px){.specs{grid-template-columns:1fr 1fr;gap:7px}.spec{padding:12px}.spec strong{font-size:.9rem}th,td{padding:10px}}
   </style>
 </head>
@@ -70,9 +71,13 @@
     <div class="section-head"><div class="eyebrow">현장 기록 파일</div><h2 id="record-title">FG JSONL 기록 읽기</h2><p>사용자가 고른 JSONL을 브라우저 안에서 읽고 원본 파일명과 행 번호를 함께 표시합니다. 수신된 imbalance 상태와 투표 수를 원본 그대로 확인할 수 있습니다.</p></div>
     <div class="import-box">
       <div class="file-row"><label for="recordFile"><strong>JSONL 파일 선택</strong></label><input id="recordFile" type="file" accept=".jsonl,application/x-ndjson,text/plain"><span class="mono">한 줄에 JSON 객체 1개</span></div>
-      <p class="import-status" id="importStatus" aria-live="polite">보고서 출력의 8개 필드 형식을 확인한 행이 여기에 표시됩니다.</p>
+      <p class="import-status" id="importStatus" aria-live="polite">측정 기록과 프로필 이벤트의 형식을 확인한 뒤 구분해 표시합니다.</p>
       <div class="errors" id="importErrors" aria-live="polite"></div>
       <p class="import-status">수신 순번은 전송 CRC 검증이 아닙니다. 시각은 센서 변환 시각이 아닌 MCU 읽기 시작이며, 창간 경계에는 표본 간격도 포함됩니다. 구형 기록의 품질·공백은 미확인으로 표시합니다.</p>
+      <p>측정 행과 프로필 이벤트를 구분합니다. 정상 이벤트는 측정 순번 연결을 끊지 않습니다. 프로필 v1의 알 수 없는 필드·이벤트·버전은 거부하며, 순번은 JavaScript의 안전한 정수 범위까지만 읽습니다.</p>
+      <h3>프로필 명령과 기준 출처</h3><p>후보는 승인 전까지 운영 기준으로 쓰지 않습니다. 저장 hold와 일시 정지는 운영 상태이며 설비 고장 진단이 아닙니다. 기준 준비 상태와 학습 중 판정 보류를 함께 확인하세요.</p>
+      <div class="table-wrap" id="profileTableWrap"><div class="empty">프로필 이벤트가 없습니다.</div></div>
+      <h3>측정 기록</h3>
       <div class="table-wrap" id="recordTableWrap"><div class="empty">JSONL 파일을 선택하면 파일명·행 번호와 기록 필드를 표시합니다.</div></div>
     </div>
   </section>
@@ -87,8 +92,57 @@
 "use strict";
 const REQUIRED = ["reason", "fs_hz", "fg_hz", "rpm", "amp_1x_g", "ratio_1x", "imbalance", "imbalance_votes"];
 const numericOrNull = value => value === null || (typeof value === "number" && Number.isFinite(value));
+// Profile events use a closed v1 schema. Measurement extensions remain preserved.
+const profileObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
+const profileUint = (v, max, min = 0) => Number.isSafeInteger(v) && v >= min && v <= max;
+const profileContext = v => typeof v === "string" && /^[A-Za-z0-9_-]{1,12}$/.test(v);
+const profileCode = v => typeof v === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(v);
+function validateMeasurementProfile(record) {
+  const has = k => Object.prototype.hasOwnProperty.call(record, k);
+  if (!has("context_id") && !has("baseline_id")) return [];
+  if (!has("context_id") || !has("baseline_id")) return ["context_id/baseline_id: 두 필드가 함께 필요합니다."];
+  if ((record.context_id !== null && !profileContext(record.context_id)) ||
+      (record.baseline_id !== null && !profileUint(record.baseline_id, 4294967295, 1)) ||
+      (record.context_id === null && record.baseline_id !== null)) return ["context_id/baseline_id: 조건·기준 ID를 확인하세요."];
+  return [];
+}
+function validateProfileEvent(record) {
+  const errors = [];
+  function shape(value, keys, label) {
+    const expected = keys.split(" ");
+    if (!profileObject(value) || Object.keys(value).length !== expected.length || expected.some(k => !Object.prototype.hasOwnProperty.call(value,k))) {
+      errors.push(`${label}: 정확한 v1 필드가 필요합니다.`); return false;
+    }
+    return true;
+  }
+  if (!shape(record,"event v command ok reason firmware profile","profile event")) return errors;
+  if (record.event !== "profile" || record.v !== 1) errors.push("profile event: 지원하지 않는 이벤트·버전입니다.");
+  if (!["boot","profile","context","ppr","learn","candidate","approve","discard","rollback","import","clear","stop","start","recover","invalid"].includes(record.command)) errors.push("command: 지원하지 않는 명령입니다.");
+  if (typeof record.ok !== "boolean" || !profileCode(record.reason) || record.firmware !== "postreport_v2") errors.push("profile event: 성공 여부·사유·펌웨어를 확인하세요.");
+  const p = record.profile;
+  if (!shape(p,"selected current candidate previous baseline_ready learning learn_count paused storage legacy","profile")) return errors;
+  if (shape(p.selected,"context_id ppr","selected") && ((p.selected.context_id !== null && !profileContext(p.selected.context_id)) || !profileUint(p.selected.ppr,16))) errors.push("selected: 조건 ID·PPR를 확인하세요.");
+  for (const k of ["baseline_ready","learning","paused"]) if (typeof p[k] !== "boolean") errors.push(`profile.${k}: boolean이 필요합니다.`);
+  if (!profileUint(p.learn_count,336) || (p.learning === false && p.learn_count !== 0)) errors.push("profile.learn_count: 0~336 정수이며 학습 종료 시 0이어야 합니다.");
+  if (shape(p.storage,"hold reason generation","storage") && (typeof p.storage.hold !== "boolean" || !profileCode(p.storage.reason) || !profileUint(p.storage.generation,4294967295))) errors.push("storage: 저장 상태·사유·세대를 확인하세요.");
+  if (shape(p.legacy,"valid reason","legacy") && (typeof p.legacy.valid !== "boolean" || !profileCode(p.legacy.reason))) errors.push("legacy: 상태·사유를 확인하세요.");
+  const ids = [];
+  for (const k of ["current","candidate","previous"]) {
+    const b = p[k]; if (b === null) continue;
+    if (!shape(b,"id context_id ppr amplitude_g learn_count origin session seq",k)) continue;
+    if (!profileUint(b.id,4294967295,1) || !profileContext(b.context_id) || !profileUint(b.ppr,16,1)) errors.push(`${k}: 기준 ID·조건·PPR를 확인하세요.`);
+    else ids.push(b.id);
+    if (!Array.isArray(b.amplitude_g) || b.amplitude_g.length !== 3 || !b.amplitude_g.every(n => typeof n === "number" && Number.isFinite(n) && n >= .001 && n <= 4)) errors.push(`${k}.amplitude_g: .001~4의 세 축 유한 숫자가 필요합니다.`);
+    if (!["learned","legacy_import"].includes(b.origin) || !profileUint(b.learn_count,336) || b.learn_count !== (b.origin === "learned" ? 336 : 0)) errors.push(`${k}: 출처와 학습창 수가 다릅니다.`);
+    if (typeof b.session !== "string" || !/^[0-9a-f]{16}$/.test(b.session) || !profileUint(b.seq,Number.MAX_SAFE_INTEGER)) errors.push(`${k}: 출처 세션·안전한 정수 순번을 확인하세요.`);
+  }
+  if (new Set(ids).size !== ids.length) errors.push("profile: 기준 ID는 서로 달라야 합니다.");
+  if (!errors.length && p.baseline_ready && (p.current === null || p.storage.hold || p.current.context_id !== p.selected.context_id || p.current.ppr !== p.selected.ppr)) errors.push("baseline_ready: 선택 조건·PPR와 일치하는 운영 기준 및 저장 hold 해제가 필요합니다.");
+  return errors;
+}
 function validateRecord(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return ["JSON 객체가 필요합니다."];
+  if (Object.prototype.hasOwnProperty.call(value,"event")) return validateProfileEvent(value);
   const errors = [];
   for (const key of REQUIRED) if (!Object.prototype.hasOwnProperty.call(value, key)) errors.push(`${key}: 필드가 없습니다.`);
   if (typeof value.reason !== "string") errors.push("reason: 문자열이어야 합니다.");
@@ -96,7 +150,7 @@ function validateRecord(value) {
   if (!(value.amp_1x_g === null || (Array.isArray(value.amp_1x_g) && value.amp_1x_g.length === 3 && value.amp_1x_g.every(item => typeof item === "number" && Number.isFinite(item))))) errors.push("amp_1x_g: 세 축의 유한 숫자 배열 또는 null이어야 합니다.");
   if (typeof value.imbalance !== "string") errors.push("imbalance: 문자열이어야 합니다.");
   if (!Number.isInteger(value.imbalance_votes)) errors.push("imbalance_votes: 정수여야 합니다.");
-  return errors.concat(validateAcquisition(value), validateRuntime(value));
+  return errors.concat(validateAcquisition(value), validateRuntime(value), validateMeasurementProfile(value));
 }
 function validateAcquisition(record) {
   if (!Object.prototype.hasOwnProperty.call(record, "acquisition")) return [];
@@ -189,7 +243,7 @@ function parseRecords(text) {
     catch (error) { tracker.reset(); errors.push(`${index + 1}행: JSON 구문 확인 — ${error.message}`); return; }
     const problems = validateRecord(value);
     if (problems.length) { tracker.reset(); errors.push(`${index + 1}행: ${problems.join(" ")}`); }
-    else accepted.push({line: index + 1, value, transport: tracker.observe(value)});
+    else accepted.push({line: index + 1, value, transport: value.event === "profile" ? null : tracker.observe(value)});
   });
   return {accepted, errors, count: lines.filter(line => line.trim()).length};
 }
@@ -217,13 +271,39 @@ function runtimeCell(value) {
     `8-bit heap 여유 ${r.heap.free_bytes} B / allocator 영역별 최저 합 ${r.heap.min_free_bytes} B / 최대 연속 ${r.heap.largest_free_bytes} B\n` +
     "출력 호출은 포맷·큐잉 시간 · 전송 완료/PC 수신 시간 미측정";
 }
+function baselineText(b) {
+  if (b === null) return "없음";
+  return `ID ${b.id} · 조건 ${b.context_id} · PPR ${b.ppr}\n진폭 [${b.amplitude_g.join(", ")}] g\n출처 ${b.origin} · 학습창 ${b.learn_count}\n세션 ${b.session} · 취득 순번 ${b.seq}`;
+}
+function renderProfileEvents(rows, filename) {
+  const wrap = document.getElementById("profileTableWrap"); wrap.replaceChildren();
+  if (!rows.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "프로필 이벤트가 없습니다."; wrap.append(empty); return; }
+  const table = document.createElement("table"); table.className = "record-table profile-table";
+  const head = document.createElement("tr");
+  for (const label of ["자료 출처", "명령 결과", "선택 조건 · 운영 상태", "운영 기준", "승인 대기 후보 (판정 기준 아님)", "이전 기준", "저장 · 실행 상태", "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; head.append(th); }
+  const thead = document.createElement("thead"); thead.append(head); table.append(thead);
+  const body = document.createElement("tbody");
+  for (const row of rows) {
+    const r = row.value, p = r.profile, tr = document.createElement("tr");
+    const cells = [`${filename}:${row.line}`, `${r.command} · ${r.ok ? "성공" : "실패"} · ${r.reason}\n${r.firmware} / v${r.v}`,
+      `조건 ${displayValue(p.selected.context_id)} · PPR ${p.selected.ppr}\n운영 기준 ${p.baseline_ready ? "준비됨" : "사용 불가"}\n학습 ${p.learning ? "진행 중 (판정 보류)" : "종료"} · ${p.learn_count}/336`,
+      baselineText(p.current), baselineText(p.candidate), baselineText(p.previous),
+      `저장 hold ${p.storage.hold ? "활성 (운영 판정 보류)" : "해제"} · ${p.storage.reason} · 세대 ${p.storage.generation}\n실행 ${p.paused ? "일시 정지" : "계속"}\n구형 기준 ${p.legacy.valid ? "유효" : "없음/무효"} · ${p.legacy.reason}\n저장 상태는 설비 고장 진단이 아닙니다.`];
+    for (const value of cells) { const td = document.createElement("td"); td.textContent = value; tr.append(td); }
+    const td = document.createElement("td"), details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre");
+    summary.textContent = "이벤트 펼치기"; pre.textContent = JSON.stringify(r,null,2); pre.className = "raw-record"; details.append(summary,pre); td.append(details); tr.append(td); body.append(tr);
+  }
+  table.append(body); wrap.append(table);
+}
 function renderRecords(rows, filename) {
+  renderProfileEvents(rows.filter(row => row.value.event === "profile"), filename);
+  rows = rows.filter(row => row.value.event !== "profile");
   const wrap = document.getElementById("recordTableWrap");
   wrap.replaceChildren();
-  if (!rows.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "형식 확인을 통과한 JSON 행이 없습니다."; wrap.append(empty); return; }
+  if (!rows.length) { const empty = document.createElement("div"); empty.className = "empty"; empty.textContent = "표시할 측정 기록이 없습니다."; wrap.append(empty); return; }
   const table = document.createElement("table"); table.className = "record-table";
   const thead = document.createElement("thead"), headRow = document.createElement("tr");
-  for (const label of ["자료 출처", "수신 순번 (파일 내 계산)", "센서 창 품질", "읽기 시작 시각 · 부팅 기준", "창간 미관측 경계", "실행 관측 (µs / B)", ...REQUIRED, "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
+  for (const label of ["자료 출처", "수신 순번 (파일 내 계산)", "센서 창 품질", "읽기 시작 시각 · 부팅 기준", "창간 미관측 경계", "실행 관측 (µs / B)", ...REQUIRED, "측정 조건 · 운영 기준 ID", "원본 JSON"]) { const th = document.createElement("th"); th.textContent = label; headRow.append(th); }
   thead.append(headRow); table.append(thead);
   const tbody = document.createElement("tbody");
   for (const row of rows) {
@@ -235,6 +315,7 @@ function renderRecords(rows, filename) {
     runtimeText.className = "raw-record"; runtimeText.textContent = runtimeCell(row.value);
     runtimeDetails.append(runtimeSummary, runtimeText); runtime.append(runtimeDetails); tr.append(runtime);
     for (const key of REQUIRED) { const td = document.createElement("td"); td.textContent = displayValue(row.value[key]); tr.append(td); }
+    const condition = document.createElement("td"); condition.textContent = Object.prototype.hasOwnProperty.call(row.value,"context_id") ? `조건 ${displayValue(row.value.context_id)} · 운영 기준 ID ${displayValue(row.value.baseline_id)}` : "미확인 · 구형 기록"; tr.append(condition);
     const raw = document.createElement("td"), details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre");
     raw.className = "raw-record"; summary.textContent = "행 펼치기"; pre.textContent = JSON.stringify(row.value, null, 2); details.append(summary, pre); raw.append(details); tr.append(raw);
     tbody.append(tr);

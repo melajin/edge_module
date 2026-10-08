@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Append FG report JSON records from an ESP32 serial port to JSONL.
 
-The logger checks the eight report fields and appends each accepted JSON object
+The logger checks legacy/evolved measurements and strict profile v1 events, then
+appends each accepted JSON object
 with its recorded fields and values intact. The captured status and vote count
 remain available as source fields for later review.
 
@@ -176,6 +177,8 @@ def collected_record(record: dict, tracker: SequenceTracker) -> dict:
     # Reserved field collisions are rejected at collection, never overwritten.
     if COLLECTOR_FIELD in record:
         raise ValueError(f"{COLLECTOR_FIELD}: reserved collector field already present")
+    if record.get("event") == "profile":
+        return dict(record)  # Lifecycle events do not consume an acquisition sequence.
     return {**record, COLLECTOR_FIELD: tracker.observe(record)}
 
 
@@ -187,13 +190,109 @@ def _is_finite_number(value: object) -> bool:
     return type(value) is int or (type(value) is float and math.isfinite(value))
 
 
-def validate_record(value: object) -> list[str]:
-    """Return schema errors for the eight FG report fields.
+# Profile v1 is closed: unknown keys/events are rejected, unlike legacy reports.
+PROFILE_COMMANDS = {"boot", "profile", "context", "ppr", "learn", "candidate", "approve", "discard", "rollback", "import", "clear", "stop", "start", "recover", "invalid"}
 
-    Other top-level fields remain valid and are preserved in the saved JSONL.
+
+def _uint(value: object, maximum: int, minimum: int = 0) -> bool:
+    return type(value) is int and minimum <= value <= maximum
+
+
+def _context(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,12}", value) is not None
+
+
+def _code(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) is not None
+
+
+def validate_measurement_profile(record: dict) -> list[str]:
+    if "context_id" not in record and "baseline_id" not in record:
+        return []
+    if "context_id" not in record or "baseline_id" not in record:
+        return ["context_id/baseline_id: fields must occur together"]
+    context, baseline = record["context_id"], record["baseline_id"]
+    if (context is not None and not _context(context)) or (baseline is not None and not _uint(baseline, 2**32 - 1, 1)):
+        return ["context_id/baseline_id: invalid condition or baseline identifier"]
+    if context is None and baseline is not None:
+        return ["baseline_id: requires a non-null context_id"]
+    return []
+
+
+def validate_profile_event(record: dict) -> list[str]:
+    errors = []
+    def shape(value, keys, path):
+        if not isinstance(value, dict) or set(value) != set(keys.split()):
+            errors.append(f"{path}: expected exact v1 fields")
+            return False
+        return True
+    if not shape(record, "event v command ok reason firmware profile", "profile event"):
+        return errors
+    if record["event"] != "profile" or type(record["v"]) is not int or record["v"] != 1:
+        errors.append("profile event: unsupported event/version")
+    if not isinstance(record["command"], str) or record["command"] not in PROFILE_COMMANDS:
+        errors.append("command: unsupported command")
+    if type(record["ok"]) is not bool or not _code(record["reason"]) or record["firmware"] != "postreport_v2":
+        errors.append("profile event: invalid outcome/reason/firmware")
+    p = record["profile"]
+    if not shape(p, "selected current candidate previous baseline_ready learning learn_count paused storage legacy", "profile"):
+        return errors
+    if shape(p["selected"], "context_id ppr", "profile.selected"):
+        selected = p["selected"]
+        if selected["context_id"] is not None and not _context(selected["context_id"]):
+            errors.append("selected.context_id: invalid condition identifier")
+        if not _uint(selected["ppr"], 16):
+            errors.append("selected.ppr: expected 0..16")
+    for key in ("baseline_ready", "learning", "paused"):
+        if type(p[key]) is not bool:
+            errors.append(f"profile.{key}: expected boolean")
+    if not _uint(p["learn_count"], 336) or (p["learning"] is False and p["learn_count"] != 0):
+        errors.append("profile.learn_count: expected 0..336 and zero when not learning")
+    if shape(p["storage"], "hold reason generation", "profile.storage"):
+        st = p["storage"]
+        if type(st["hold"]) is not bool or not _code(st["reason"]) or not _uint(st["generation"], 2**32 - 1):
+            errors.append("profile.storage: invalid hold/reason/generation")
+    if shape(p["legacy"], "valid reason", "profile.legacy"):
+        if type(p["legacy"]["valid"]) is not bool or not _code(p["legacy"]["reason"]):
+            errors.append("profile.legacy: invalid valid/reason")
+    ids = []
+    for key in ("current", "candidate", "previous"):
+        b = p[key]
+        if b is None:
+            continue
+        if not shape(b, "id context_id ppr amplitude_g learn_count origin session seq", f"profile.{key}"):
+            continue
+        if not _uint(b["id"], 2**32 - 1, 1) or not _context(b["context_id"]) or not _uint(b["ppr"], 16, 1):
+            errors.append(f"profile.{key}: invalid id/context/ppr")
+        else:
+            ids.append(b["id"])
+        a = b["amplitude_g"]
+        if not isinstance(a, list) or len(a) != 3 or not all(_is_finite_number(n) and .001 <= n <= 4 for n in a):
+            errors.append(f"profile.{key}.amplitude_g: expected three finite values in .001..4")
+        if b["origin"] not in ("learned", "legacy_import") or not _uint(b["learn_count"], 336) or b["learn_count"] != (336 if b["origin"] == "learned" else 0):
+            errors.append(f"profile.{key}: origin/learn_count disagree")
+        if not isinstance(b["session"], str) or re.fullmatch(r"[0-9a-f]{16}", b["session"]) is None or not _is_counter(b["seq"]):
+            errors.append(f"profile.{key}: invalid provenance session/safe sequence")
+    if len(ids) != len(set(ids)):
+        errors.append("profile: baseline ids must be unique")
+    if not errors and p["baseline_ready"]:
+        current, selected = p["current"], p["selected"]
+        if current is None or p["storage"]["hold"] or any(current[k] != selected[k] for k in ("context_id", "ppr")):
+            errors.append("profile.baseline_ready: requires matching current condition/ppr and no storage hold")
+    return errors
+
+
+def validate_record(value: object) -> list[str]:
+    """Validate measurements or closed-schema profile v1 lifecycle events.
+
+    Measurement extension fields are preserved. Profile unknown fields/events
+    are rejected; all sequence values must be safe integers (0..2**53-1).
     """
     if not isinstance(value, dict):
         return ["record must be a JSON object"]
+
+    if "event" in value:
+        return validate_profile_event(value)
 
     errors = [f"{name}: missing field" for name in REQUIRED_FIELDS if name not in value]
     if not isinstance(value.get("reason"), str):
@@ -219,7 +318,7 @@ def validate_record(value: object) -> list[str]:
     if isinstance(votes, bool) or not isinstance(votes, int):
         errors.append("imbalance_votes: expected an integer")
 
-    return errors + validate_acquisition(value) + validate_runtime(value)
+    return errors + validate_acquisition(value) + validate_runtime(value) + validate_measurement_profile(value)
 
 
 def parse_report_line(line: bytes | str) -> tuple[dict | None, str | None]:

@@ -10,6 +10,11 @@ TestWire Wire;
 uint64_t test_clock = 1000000;
 multi_heap_info_t test_heap;
 unsigned test_heap_queries = 0;
+std::map<std::string, std::vector<unsigned char>> Preferences::data;
+std::map<std::string, int> Preferences::query_errors, Preferences::read_errors;
+bool Preferences::fail_open_read = false, Preferences::fail_open_write = false;
+bool Preferences::fail_write = false, Preferences::corrupt_readback = false, Preferences::fail_read = false;
+unsigned Preferences::writes = 0, Preferences::legacy_writes = 0;
 
 static AcquisitionQuality window(uint64_t start, unsigned n = V3_SAMPLE_COUNT,
                                   unsigned step = 2500, float value = 0.1f)
@@ -57,6 +62,8 @@ int main()
 
     setup();
     assert(Serial.tx_buffer == 2048 && serial_ready);
+    assert(paused);
+    process_command("start");
     Serial.output.clear();
     Serial.call_cost_us = 37;
     const uint64_t calls = Serial.calls;
@@ -116,6 +123,8 @@ int main()
     profile_state = "learning_in_progress";
     profile_reason = "ppr_changed_baseline_invalidated";
     ppr = 16; phase_count = 5; learn_count = 336;
+    strcpy(profiles.state.context_id, "ABCDEFGHIJKL");
+    baseline_ready = true; profiles.state.current.id = UINT32_MAX;
     v3_signal_result_t signal = {};
     signal.reason = V3_SIGNAL_OK;
     signal.sample_rate_hz = 420;
