@@ -18,7 +18,8 @@ void ml_live_run(const v3_sample_t *samples,unsigned count,int axis,
   if(j&&fabs((uint32_t)(samples[j].time_us-samples[j-1].time_us)-1e6/out->fs_hz)>0.05*1e6/out->fs_hz){out->reason="invalid_time_axis";return;}
  }
  /* Adaptation deliberately differs from training resample_poly: interpolation
-  * of actual conversion timestamps at 400 Hz. Report this domain shift. */
+  * of MCU sensor-read timestamps at 400 Hz, not exact conversion instants.
+  * Report this domain shift. */
  double start=end-399./400.;if(start<0){out->reason="insufficient_one_second";return;}
  unsigned j=0;
  for(unsigned k=0;k<400;k++){
@@ -29,6 +30,11 @@ void ml_live_run(const v3_sample_t *samples,unsigned count,int axis,
  }
  double nyquist=fmin(200.,out->fs_hz/2.);
  for(int k=1;k<=18;k++)if((k*.5+.15)*out->rpm/60.<nyquist)out->order_mask|=1u<<(k-1);
+ ml_reference_resource_state_t resource=ml_reference_resource_state();
+ if(resource!=ML_REFERENCE_READY){
+  out->reason=resource==ML_REFERENCE_ALLOCATION_FAILED?"ml_workspace_allocation_failed":"ml_workspace_uninitialized";
+  return;
+ }
  if(!ml_reference_extract(wave,out->rpm,features)){out->reason="zero_or_nonfinite_features";return;}
  out->label=ml_reference_predict(features,out->scores);
  out->reason=out->label>=0?"experimental_domain_mismatch":"nonfinite_inference";

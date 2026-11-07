@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Append FG report JSON records from an ESP32 serial port to JSONL.
 
-The logger checks the eight report fields and appends each accepted JSON object
+The logger checks legacy/evolved measurements and strict profile v1 events, then
+appends each accepted JSON object
 with its recorded fields and values intact. The captured status and vote count
 remain available as source fields for later review.
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Iterable, TextIO
@@ -32,6 +34,152 @@ REQUIRED_FIELDS = (
     "imbalance_votes",
 )
 NUMERIC_FIELDS = ("fs_hz", "fg_hz", "rpm", "ratio_1x")
+MAX_SAFE_INTEGER = 2**53 - 1
+COLLECTOR_FIELD = "collector_report_transport"
+
+
+def _is_counter(value: object) -> bool:
+    return type(value) is int and 0 <= value <= MAX_SAFE_INTEGER
+
+
+def validate_acquisition(record: dict) -> list[str]:
+    if "acquisition" not in record:
+        return []  # Legacy records have unknown acquisition quality.
+    a = record["acquisition"]
+    if not isinstance(a, dict):
+        return ["acquisition: expected an object"]
+    errors = []
+    for key in ("v", "session", "seq", "start_us", "end_us", "gap_us", "valid", "reason"):
+        if key not in a:
+            errors.append(f"acquisition.{key}: missing field")
+    if type(a.get("v")) is not int or a["v"] != 1:
+        errors.append("acquisition.v: expected 1")
+    if not isinstance(a.get("session"), str) or not re.fullmatch(r"[0-9a-fA-F]{16}", a["session"]):
+        errors.append("acquisition.session: expected 16 hexadecimal digits")
+    if not _is_counter(a.get("seq")):
+        errors.append("acquisition.seq: expected a nonnegative safe integer")
+    for key in ("start_us", "end_us", "gap_us"):
+        if a.get(key) is not None and not _is_counter(a[key]):
+            errors.append(f"acquisition.{key}: expected a nonnegative safe integer or null")
+    if type(a.get("valid")) is not bool:
+        errors.append("acquisition.valid: expected a boolean")
+    reasons = {"ok", "no_samples", "partial_window", "sample_time", "sample_rate", "sensor_range", "numeric_input"}
+    if not isinstance(a.get("reason"), str) or a["reason"] not in reasons:
+        errors.append("acquisition.reason: unsupported quality reason")
+    count = record.get("samples")
+    if not _is_counter(count) or count > 512:
+        errors.append("samples: acquisition requires an integer from 0 to 512")
+    if errors:
+        return errors
+    start, end, gap = a["start_us"], a["end_us"], a["gap_us"]
+    if count == 0:
+        if any(x is not None for x in (start, end, gap)) or a["reason"] != "no_samples" or a["valid"]:
+            errors.append("acquisition: no samples requires null times and invalid/no_samples")
+    elif start is None or end is None or end < start or (count > 1 and end == start):
+        errors.append("acquisition: samples require ordered start/end times")
+    elif count == 1 and end != start:
+        errors.append("acquisition: one sample requires equal start/end times")
+    if count and count < 512 and (a["valid"] or a["reason"] != "partial_window"):
+        errors.append("acquisition: incomplete samples require invalid/partial_window")
+    if count == 512 and a["reason"] in {"no_samples", "partial_window"}:
+        errors.append("acquisition: full sample count conflicts with reason")
+    if a["valid"] != (a["reason"] == "ok"):
+        errors.append("acquisition: valid and reason disagree")
+    if a["valid"] and start is not None and end is not None and end > start:
+        rate = 511_000_000 / (end - start)
+        if rate < 380 or rate > 420:
+            errors.append("acquisition: valid window rate is outside 380..420 Hz")
+    if a["seq"] == 0 and gap is not None:
+        errors.append("acquisition: first attempt cannot have a previous sample gap")
+    if start is not None and gap is not None and gap > start:
+        errors.append("acquisition: gap exceeds the boot clock")
+    return errors
+
+
+def validate_runtime(record: dict) -> list[str]:
+    if "runtime" not in record:
+        return []  # Legacy runtime is unknown, never inferred from other fields.
+    r = record["runtime"]
+    if not isinstance(r, dict):
+        return ["runtime: expected an object"]
+    errors = []
+    for key in ("v", "pre_emit_us", "previous_emit", "heap"):
+        if key not in r:
+            errors.append(f"runtime.{key}: missing field")
+    if type(r.get("v")) is not int or r["v"] != 1:
+        errors.append("runtime.v: expected 1")
+    if not _is_counter(r.get("pre_emit_us")):
+        errors.append("runtime.pre_emit_us: expected a nonnegative safe integer")
+    a = record.get("acquisition")
+    seq = a.get("seq") if isinstance(a, dict) else None
+    if not _is_counter(seq):
+        errors.append("runtime: acquisition.seq is required")
+    previous = r.get("previous_emit")
+    if previous is not None:
+        if not isinstance(previous, dict):
+            errors.append("runtime.previous_emit: expected an object or null")
+        else:
+            for key in ("seq", "call_us"):
+                if not _is_counter(previous.get(key)):
+                    errors.append(f"runtime.previous_emit.{key}: expected a nonnegative safe integer")
+            if _is_counter(seq) and _is_counter(previous.get("seq")) and previous["seq"] != seq - 1:
+                errors.append("runtime.previous_emit.seq: must identify the preceding attempt")
+    elif _is_counter(seq) and seq != 0:
+        errors.append("runtime.previous_emit: null is only valid for the first attempt")
+    heap = r.get("heap")
+    if not isinstance(heap, dict):
+        errors.append("runtime.heap: expected an object")
+    else:
+        keys = ("free_bytes", "min_free_bytes", "largest_free_bytes")
+        for key in keys:
+            if not _is_counter(heap.get(key)):
+                errors.append(f"runtime.heap.{key}: expected a nonnegative safe integer")
+        if all(_is_counter(heap.get(key)) for key in keys):
+            if heap["min_free_bytes"] > heap["free_bytes"] or heap["largest_free_bytes"] > heap["free_bytes"]:
+                errors.append("runtime.heap: minimum/largest free cannot exceed total free")
+    return errors
+
+
+class SequenceTracker:
+    """Receiver evidence only: sequence continuity is not a CRC check."""
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self.session: str | None = None
+        self.seq: int | None = None
+
+    def observe(self, record: dict) -> dict:
+        a = record.get("acquisition")
+        status, missing = "unknown", None
+        if a is None:
+            self.reset()
+        else:
+            session, seq = a["session"].lower(), a["seq"]
+            if self.session is None:
+                status = "first"
+            elif session != self.session:
+                status = "session_changed"
+            elif seq == self.seq:
+                status, missing = "duplicate", 0
+            elif seq < self.seq:
+                status = "out_of_order"
+            else:
+                missing = seq - self.seq - 1
+                status = "gap" if missing else "contiguous"
+            if status not in {"duplicate", "out_of_order"}:
+                self.session, self.seq = session, seq
+        return {"source": "report_serial_logger", "status": status, "missing": missing}
+
+
+def collected_record(record: dict, tracker: SequenceTracker) -> dict:
+    # Reserved field collisions are rejected at collection, never overwritten.
+    if COLLECTOR_FIELD in record:
+        raise ValueError(f"{COLLECTOR_FIELD}: reserved collector field already present")
+    if record.get("event") == "profile":
+        return dict(record)  # Lifecycle events do not consume an acquisition sequence.
+    return {**record, COLLECTOR_FIELD: tracker.observe(record)}
 
 
 def _reject_json_constant(value: str) -> None:
@@ -42,13 +190,109 @@ def _is_finite_number(value: object) -> bool:
     return type(value) is int or (type(value) is float and math.isfinite(value))
 
 
-def validate_record(value: object) -> list[str]:
-    """Return schema errors for the eight FG report fields.
+# Profile v1 is closed: unknown keys/events are rejected, unlike legacy reports.
+PROFILE_COMMANDS = {"boot", "profile", "context", "ppr", "learn", "candidate", "approve", "discard", "rollback", "import", "clear", "stop", "start", "recover", "invalid"}
 
-    Other top-level fields remain valid and are preserved in the saved JSONL.
+
+def _uint(value: object, maximum: int, minimum: int = 0) -> bool:
+    return type(value) is int and minimum <= value <= maximum
+
+
+def _context(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,12}", value) is not None
+
+
+def _code(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) is not None
+
+
+def validate_measurement_profile(record: dict) -> list[str]:
+    if "context_id" not in record and "baseline_id" not in record:
+        return []
+    if "context_id" not in record or "baseline_id" not in record:
+        return ["context_id/baseline_id: fields must occur together"]
+    context, baseline = record["context_id"], record["baseline_id"]
+    if (context is not None and not _context(context)) or (baseline is not None and not _uint(baseline, 2**32 - 1, 1)):
+        return ["context_id/baseline_id: invalid condition or baseline identifier"]
+    if context is None and baseline is not None:
+        return ["baseline_id: requires a non-null context_id"]
+    return []
+
+
+def validate_profile_event(record: dict) -> list[str]:
+    errors = []
+    def shape(value, keys, path):
+        if not isinstance(value, dict) or set(value) != set(keys.split()):
+            errors.append(f"{path}: expected exact v1 fields")
+            return False
+        return True
+    if not shape(record, "event v command ok reason firmware profile", "profile event"):
+        return errors
+    if record["event"] != "profile" or type(record["v"]) is not int or record["v"] != 1:
+        errors.append("profile event: unsupported event/version")
+    if not isinstance(record["command"], str) or record["command"] not in PROFILE_COMMANDS:
+        errors.append("command: unsupported command")
+    if type(record["ok"]) is not bool or not _code(record["reason"]) or record["firmware"] != "postreport_v2":
+        errors.append("profile event: invalid outcome/reason/firmware")
+    p = record["profile"]
+    if not shape(p, "selected current candidate previous baseline_ready learning learn_count paused storage legacy", "profile"):
+        return errors
+    if shape(p["selected"], "context_id ppr", "profile.selected"):
+        selected = p["selected"]
+        if selected["context_id"] is not None and not _context(selected["context_id"]):
+            errors.append("selected.context_id: invalid condition identifier")
+        if not _uint(selected["ppr"], 16):
+            errors.append("selected.ppr: expected 0..16")
+    for key in ("baseline_ready", "learning", "paused"):
+        if type(p[key]) is not bool:
+            errors.append(f"profile.{key}: expected boolean")
+    if not _uint(p["learn_count"], 336) or (p["learning"] is False and p["learn_count"] != 0):
+        errors.append("profile.learn_count: expected 0..336 and zero when not learning")
+    if shape(p["storage"], "hold reason generation", "profile.storage"):
+        st = p["storage"]
+        if type(st["hold"]) is not bool or not _code(st["reason"]) or not _uint(st["generation"], 2**32 - 1):
+            errors.append("profile.storage: invalid hold/reason/generation")
+    if shape(p["legacy"], "valid reason", "profile.legacy"):
+        if type(p["legacy"]["valid"]) is not bool or not _code(p["legacy"]["reason"]):
+            errors.append("profile.legacy: invalid valid/reason")
+    ids = []
+    for key in ("current", "candidate", "previous"):
+        b = p[key]
+        if b is None:
+            continue
+        if not shape(b, "id context_id ppr amplitude_g learn_count origin session seq", f"profile.{key}"):
+            continue
+        if not _uint(b["id"], 2**32 - 1, 1) or not _context(b["context_id"]) or not _uint(b["ppr"], 16, 1):
+            errors.append(f"profile.{key}: invalid id/context/ppr")
+        else:
+            ids.append(b["id"])
+        a = b["amplitude_g"]
+        if not isinstance(a, list) or len(a) != 3 or not all(_is_finite_number(n) and .001 <= n <= 4 for n in a):
+            errors.append(f"profile.{key}.amplitude_g: expected three finite values in .001..4")
+        if b["origin"] not in ("learned", "legacy_import") or not _uint(b["learn_count"], 336) or b["learn_count"] != (336 if b["origin"] == "learned" else 0):
+            errors.append(f"profile.{key}: origin/learn_count disagree")
+        if not isinstance(b["session"], str) or re.fullmatch(r"[0-9a-f]{16}", b["session"]) is None or not _is_counter(b["seq"]):
+            errors.append(f"profile.{key}: invalid provenance session/safe sequence")
+    if len(ids) != len(set(ids)):
+        errors.append("profile: baseline ids must be unique")
+    if not errors and p["baseline_ready"]:
+        current, selected = p["current"], p["selected"]
+        if current is None or p["storage"]["hold"] or any(current[k] != selected[k] for k in ("context_id", "ppr")):
+            errors.append("profile.baseline_ready: requires matching current condition/ppr and no storage hold")
+    return errors
+
+
+def validate_record(value: object) -> list[str]:
+    """Validate measurements or closed-schema profile v1 lifecycle events.
+
+    Measurement extension fields are preserved. Profile unknown fields/events
+    are rejected; all sequence values must be safe integers (0..2**53-1).
     """
     if not isinstance(value, dict):
         return ["record must be a JSON object"]
+
+    if "event" in value:
+        return validate_profile_event(value)
 
     errors = [f"{name}: missing field" for name in REQUIRED_FIELDS if name not in value]
     if not isinstance(value.get("reason"), str):
@@ -74,7 +318,7 @@ def validate_record(value: object) -> list[str]:
     if isinstance(votes, bool) or not isinstance(votes, int):
         errors.append("imbalance_votes: expected an integer")
 
-    return errors
+    return errors + validate_acquisition(value) + validate_runtime(value) + validate_measurement_profile(value)
 
 
 def parse_report_line(line: bytes | str) -> tuple[dict | None, str | None]:
@@ -108,14 +352,27 @@ def append_report_lines(
 ) -> tuple[int, int]:
     """Append valid FG records and return (saved, rejected-schema-or-json)."""
     saved = rejected = 0
+    tracker = SequenceTracker()
     for line_number, line in enumerate(lines, start=1):
         record, issue = parse_report_line(line)
         if issue:
+            tracker.reset()
             rejected += 1
             print(f"[report-logger] input line {line_number}: {issue}", file=errors)
         elif record is not None:
-            write_record(output, record)
+            try:
+                collected = collected_record(record, tracker)
+            except ValueError as exc:
+                tracker.reset()
+                rejected += 1
+                print(f"[report-logger] input line {line_number}: {exc}", file=errors)
+                continue
+            write_record(output, collected)
             saved += 1
+        elif line.strip():
+            # Console text may also be a damaged frame; do not carry a prior
+            # continuity claim across an unrecognized nonempty serial line.
+            tracker.reset()
     return saved, rejected
 
 
@@ -139,6 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     input_line = 0
+    tracker = SequenceTracker()
     print(f"[report-logger] {args.port} · {BAUD_RATE} baud → {args.output}", flush=True)
     try:
         with serial.Serial(args.port, BAUD_RATE, timeout=1) as port, args.output.open(
@@ -151,11 +409,20 @@ def main(argv: list[str] | None = None) -> int:
                 input_line += 1
                 record, issue = parse_report_line(line)
                 if issue:
+                    tracker.reset()
                     print(f"[report-logger] serial line {input_line}: {issue}", file=sys.stderr)
                 elif record is not None:
-                    write_record(output, record)
+                    try:
+                        collected = collected_record(record, tracker)
+                    except ValueError as exc:
+                        tracker.reset()
+                        print(f"[report-logger] serial line {input_line}: {exc}", file=sys.stderr)
+                        continue
+                    write_record(output, collected)
                     count += 1
                     print(f"[report-logger] JSONL 기록 {count}건", flush=True)
+                elif line.strip():
+                    tracker.reset()
     except KeyboardInterrupt:
         print(f"\n[report-logger] 종료 · 기록 {count}건", flush=True)
         return 0
