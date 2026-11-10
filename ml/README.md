@@ -36,18 +36,9 @@
 
 단일 창 탐지율은 창 단위 비율이며, `36/36`과 `16/24`는 파일별 확정 경보 여부다. 결과 JSON은 [`cwru_results.json`](results/cwru_results.json), [`mafaulda_results.json`](results/mafaulda_results.json)에 저장돼 있다.
 
-## 보고서의 별도 구현·평가 경로
+## 보고서의 다른 평가 경로
 
-아래 기록은 기존 `ml/`의 평가표와 별도 버전·입력 계약을 가진다.
-
-| 경로 | 입력·계산 | 기록된 평가 |
-|---|---|---|
-| CWRU 펌웨어 통합 | CWRU `N=4096`, `fs=12000 Hz`, RMS·첨도·1×/2×/3×·HF 비율의 6특징, 네 클래스 | Python/C 특징·점수 비교 640창, 클래스 정답 581/640(90.78%); 파일마다 첫 4창을 초기 이력으로 채운 뒤, 10파일의 나머지 600창에서 4/5 확정 결과를 집계. 고장 486/486창 탐지·정상 0/114창 확정 오경보 |
-| Mendeley V3 101특징 모델 | 20개 trial-group, 다섯 fold OOF 개발 평가; 선택 축 400점·400 Hz 모델 입력 | 1,200개 OOF 기록, 정확도 93.67%, 축 정렬 재현율 86.00%, 기계적 이완 재현율 88.67% |
-| 실시간 101특징 어댑터 | ADXL345 512표본 창을 시간축으로 400점 보간, 선택 축 기본 X, 실제 FG RPM 사용 | 20×20 DFT 분해와 생성된 선형 weight/bias로 평균 SVM 마진 계산, 시리얼 230400 baud |
-| FG V3 보고서 검증 사본 | 512표본 창에서 회전 동기 1× 진폭·위상 계산 | 시리얼 115200 baud, 정상 팬 336창 관측 기록 |
-
-Mendeley 개발 평가, 실시간 입력 연결, FG 관측, CWRU 호스트 재생은 상세 해설의 각 절에서 입력과 근거 종류를 확인한다: [101특징 모델](../docs/report-detail/03-ml-model.md), [FG·하드웨어](../docs/report-detail/05-fg-hardware.md), [결과와 검증 범위](../docs/report-detail/06-results.md).
+위 표는 기존 `ml/` 파이프라인의 결과다. 보고서의 CWRU 잠금 시험, Mendeley 101특징 모델, 정상 팬 실측은 입력과 평가 단위가 다른 별도 실험이며 [실험 기록](../docs/experiments.md)에 정리되어 있다. 구현별 입력 조건은 [C·ESP32 안내](../edge_module_c/README.md)에 있다.
 
 ## 주요 파일과 실행 순서
 
@@ -61,12 +52,3 @@ Mendeley 개발 평가, 실시간 입력 연결, FG 관측, CWRU 호스트 재�
 | `make_figures.py` | 혼동행렬·특징 중요도·분포 그림 생성 |
 
 재현 순서는 `download_data` → `train_models` → `make_figures` → `export_c`이며, 각 모듈은 `python -m ml.<모듈명>`으로 실행한다. 입력 계산은 [`dataset.py`](dataset.py)·[`features_real.py`](features_real.py)에서 [공통 Python 특징 함수](../src/feature_extraction.py)를 호출한다. 저장소 V2는 별도 [V2 기준 코드](../src/feature_extraction_v2.py)와 [V2 C 코어](../edge_module_c/README.md)에서 확인한다.
-
-## 추가 구현 원본
-
-| 자료 | 현재 워크스페이스 위치 | 연결 내용 |
-|---|---|---|
-| 101특징 모델 개발 코드 | [report_model/](report_model/) | 특징 계약, trial-group 분할, 개발 평가 |
-| 실시간 101특징 C 코드 | [../edge_module_c/report_ml/](../edge_module_c/report_ml/) | 입력 어댑터, 20×20 DFT, 선형 모델 계수 |
-| CWRU 펌웨어·호스트 재생 | [../edge_module_c/report_cwru/](../edge_module_c/report_cwru/) | 6특징 C 계산, 640창 비교, 600창 4/5 보고서 평가 |
-| 상세 출처 및 보고서 원자료 | [출처·코드 대응표](../docs/report-detail/08-sources.md) | 공개 데이터 출처, 평가 원자료와 현재 코드 위치 |
