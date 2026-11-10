@@ -85,10 +85,10 @@ V2 계산 상세는 [물리 근거 경로 해설](../docs/report-detail/02-physi
 |---|---|---|
 | FG V3 보고서 검증 사본 | 512표본, 창별 표본 시각, 1× 동기 진폭·위상 | 115200 baud, 정상 팬 336창의 보고서 관측. [보존 소스](esp32/edge_alimi_adxl345_fg_report/source_snapshot/) |
 | 물리 근거 코어 | 512표본 X/Y/Z, 창별 실제 `fs`·FG 주파수, 정상 336창의 로그 중앙값/MAD | 신뢰 상한 `min(160 Hz, 0.4·fs)`, 가용 상태·후보 근거 계산 |
-| 101특징 ML | 512표본 실시간 입력을 timestamp 기준 400점·400 Hz로 보간, 선택 축과 FG RPM 사용 | 101특징, 20×20 DFT 분해, 접은 선형 weight/bias, 230400 baud |
+| 101특징 ML | 512표본 실시간 입력을 timestamp 기준 400점·400 Hz로 보간, 선택 축(기본 X)과 FG RPM 사용 | 101특징, 20×20 DFT 분해, 접은 선형 weight/bias, 230400 baud |
 | CWRU 베어링 분류 | 4096표본, 12000 Hz, 6특징·네 클래스 | 호스트 재생에서 640창 특징·점수 비교, 40창 초기 이력 뒤 600창 4/5 평가 |
 
-물리·ML·CWRU는 이 폴더의 `report_physical/`, `report_ml/`, `report_cwru/`에 있으며, 101특징 Python 정의는 `../ml/report_model/`에 있다. 구현별 함수·수식·평가 분모는 [상세 해설](../docs/report-detail/README.md)과 [코드 대응표](../docs/report-detail/08-sources.md)에서 확인할 수 있다.
+물리·ML·CWRU는 이 폴더의 `report_physical/`, `report_ml/`, `report_cwru/`에 있으며, 101특징 Python 정의는 `../ml/report_model/`에 있다. 실험별 방법과 결과는 [실험 기록](../docs/experiments.md), 구현별 함수·수식·평가 분모는 [상세 해설](../docs/report-detail/README.md)과 [코드 대응표](../docs/report-detail/08-sources.md)에 있다.
 
 ## 이전 V2 사본 갱신
 
